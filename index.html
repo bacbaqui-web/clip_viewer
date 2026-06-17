@@ -865,10 +865,7 @@ body{padding-bottom:76px}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
 
 <script>
-  // ImgBB API Key (이미지 업로드용)
-    // const IMGBB_API_KEY = "f64175972f4e4178332db9ae8559969b"; // [수정 1] 더 이상 필요 없으므로 주석 처리
-    
-    // (이 아래 UI 스크립트 내용은 변경 사항 없음)
+  // Google Drive 저장 방식 버전
     
     // 전역 상태
     window.customTasks = window.customTasks || [];
@@ -1020,7 +1017,7 @@ body{padding-bottom:76px}
         
         closeEditModal();
         showFeedbackMessage('제목이 저장되었습니다.');
-        // onSnapshot이 Firestore 업데이트를 감지하고 renderImageBookmarks를 호출할 것입니다.
+        renderImageBookmarks();
     };
 
 
@@ -1115,7 +1112,7 @@ body{padding-bottom:76px}
       }
       cancelBtn.addEventListener('click',closeModal);
       saveTaskBtn.addEventListener('click',saveTask);
-      // window.deleteTask는 Firebase 스크립트에서 정의됨
+      // window.deleteTask는 Google Drive 저장 레이어에서 정의됨
       deleteTaskBtn.addEventListener('click',()=>window.deleteTask&&window.deleteTask());
       taskModal.addEventListener('click',(e)=>{ if(e.target===taskModal) closeModal(); });
 
@@ -1461,8 +1458,7 @@ body{padding-bottom:76px}
         const isVideo = d.type === 'video';
         const isLink = d.type === 'link'; // 일반 페이지 링크
         const isInstagram = d.type === 'instagram'; // 인스타그램 게시물
-        // [수정] type: 'imgbb' 또는 'firebase_storage' 또는 'remote'일 때가 이미지임
-        const isImage = d.type === 'imgbb' || d.type === 'firebase_storage' || d.type === 'remote';
+        const isImage = d.type === 'drive_image' || d.type === 'remote' || !!d.driveFileId;
         
         const isEditable = isVideo || isLink || isInstagram; // 제목 수정 가능한 항목
         const imageUrl = d.url;
@@ -3726,7 +3722,7 @@ function initBookmarks(){
 
 
 // ===== Inlined main.js : Google Drive backend =====
-// Firebase 제거 버전. 모든 데이터는 로그인한 사용자의 Google Drive 안에 저장됩니다.
+// 모든 데이터는 로그인한 사용자의 Google Drive 안에 저장됩니다.
 
     const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
     const DRIVE_APP_FOLDER = '코믹서포터';
@@ -3761,13 +3757,7 @@ function initBookmarks(){
     window.__unsubs=[];
 
     function getGoogleClientId(){
-      let id = localStorage.getItem('comicschedule_google_client_id') || DEFAULT_GOOGLE_CLIENT_ID || '';
-      if(!id){
-        id = prompt('Google OAuth Client ID를 입력하세요.\nGoogle Cloud Console에서 만든 Web application Client ID입니다.') || '';
-        id = id.trim();
-        if(id) localStorage.setItem('comicschedule_google_client_id', id);
-      }
-      return id;
+      return DEFAULT_GOOGLE_CLIENT_ID;
     }
 
     function nowMs(){ return Date.now(); }
@@ -3825,7 +3815,7 @@ function initBookmarks(){
     function serializableBookmarks(){
       return (window.imageBookmarks||[]).map(b=>{
         const copy={...b};
-        if(copy.type==='firebase_storage' && copy.driveFileId){
+        if(copy.driveFileId){
           copy.url=null;
         }
         if(copy.previewDriveFileId){ copy.previewImageUrl=null; }
@@ -4166,7 +4156,7 @@ function initBookmarks(){
     window.addGenericBookmark=async(url)=>{ if(!ensureLogin()) return; window.imageBookmarks.push({id:genId('bm'),pageUrl:url,url:null,type:'link',title:null,sourceDomain:extractDomain(url),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
     window.addInstagramBookmark=async(embedCode)=>{ if(!ensureLogin()) return; let pageUrl='인스타그램 게시물'; try{ const doc=new DOMParser().parseFromString(embedCode,'text/html'); const b=doc.querySelector('blockquote.instagram-media'); if(b?.cite) pageUrl=b.cite; }catch(_){} window.imageBookmarks.push({id:genId('bm'),pageUrl,embedCode,url:null,type:'instagram',title:null,sourceDomain:extractDomain(pageUrl),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
     window.addRemoteImage=async(url,pageUrl)=>{ if(!ensureLogin()) return; window.imageBookmarks.push({id:genId('bm'),url,pageUrl:pageUrl||null,type:'remote',sourceDomain:extractDomain(pageUrl||url),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
-    window.addImage=async(file,pageUrl)=>{ if(!ensureLogin()) return; if(typeof file==='string') return window.addRemoteImage(file,pageUrl||file); try{ showFeedbackMessage('Drive에 이미지 업로드 중...'); const uploaded=await uploadFileToDrive(file,null,'bookmark'); const url=URL.createObjectURL(file); const ms=nowMs(); window.imageBookmarks.push({id:genId('bm'),url,pageUrl:pageUrl||null,type:'firebase_storage',driveFileId:uploaded.id,title:null,sourceDomain:pageUrl?extractDomain(pageUrl):'Google Drive',bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(ms),timestampMs:ms}); renderEverything(); await saveAppDataNow(); showFeedbackMessage('이미지가 Drive에 저장되었습니다.'); }catch(e){ showAlert('이미지 추가 실패: '+(e.message||e)); } };
+    window.addImage=async(file,pageUrl)=>{ if(!ensureLogin()) return; if(typeof file==='string') return window.addRemoteImage(file,pageUrl||file); try{ showFeedbackMessage('Drive에 이미지 업로드 중...'); const uploaded=await uploadFileToDrive(file,null,'bookmark'); const url=URL.createObjectURL(file); const ms=nowMs(); window.imageBookmarks.push({id:genId('bm'),url,pageUrl:pageUrl||null,type:'drive_image',driveFileId:uploaded.id,title:null,sourceDomain:pageUrl?extractDomain(pageUrl):'Google Drive',bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(ms),timestampMs:ms}); renderEverything(); await saveAppDataNow(); showFeedbackMessage('이미지가 Drive에 저장되었습니다.'); }catch(e){ showAlert('이미지 추가 실패: '+(e.message||e)); } };
     window.updateBookmarkTitle=async(id,newTitle)=>{ const b=(window.imageBookmarks||[]).find(x=>x.id===id); if(b){ b.title=newTitle||null; renderEverything(); scheduleSaveAppData(); } };
     window.uploadBookmarkPreviewImage=async(bookmarkId,file)=>{ if(!ensureLogin()) return; const b=(window.imageBookmarks||[]).find(x=>x.id===bookmarkId); if(!b) return; const uploaded=await uploadFileToDrive(file,null,'bookmark_preview'); b.previewDriveFileId=uploaded.id; b.previewImageUrl=URL.createObjectURL(file); renderEverything(); await saveAppDataNow(); };
     window.deleteImage=async(id)=>{ if(!ensureLogin()) return; const row=(window.imageBookmarks||[]).find(b=>b.id===id); if(row){ await deleteDriveFile(row.driveFileId); await deleteDriveFile(row.previewDriveFileId); } window.imageBookmarks=(window.imageBookmarks||[]).filter(b=>b.id!==id); renderEverything(); await saveAppDataNow(); showFeedbackMessage('북마크가 삭제되었습니다.'); };
