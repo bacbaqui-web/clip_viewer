@@ -37,6 +37,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     let driveFolders=null;
     let appDataFileId=null;
     let driveSaveTimer=null;
+    let driveSaveQueue=Promise.resolve();
     let driveImageUrlCache=new Map();
     window.__unsubs=[];
 
@@ -242,8 +243,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       return '.png';
     }
     function getNoteTxtFileName(tab,idx=0){
-      const order=Number.isFinite(Number(tab?.order)) ? Number(tab.order) : idx*10;
-      return `${pad3(order)}_${makeSafeDriveName(tab?.name||tab?.id||'메모')}.txt`;
+      return `${pad3(idx+1)}_${makeSafeDriveName(tab?.name||tab?.id||'메모')}.txt`;
     }
     function getBookmarkTabFolderName(tab,idx=0){
       // Drive에서 보기 쉽게 탭 순서대로 001_기본, 002_자료 형식
@@ -516,16 +516,23 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         throw e;
       }
     }
+
+    function queueDriveSave(saveFn){
+      const run=driveSaveQueue.catch(()=>{}).then(saveFn);
+      driveSaveQueue=run.catch(()=>{});
+      return run;
+    }
+
     function scheduleSaveNonNotesData(){
       clearTimeout(driveSaveTimer);
       setDriveStatus('로컬 반영됨 · Drive 저장 예약됨');
-      driveSaveTimer=setTimeout(()=>saveNonNotesDataNow().catch(e=>console.error(e)),700);
+      driveSaveTimer=setTimeout(()=>queueDriveSave(saveNonNotesDataNow).catch(e=>console.error(e)),700);
     }
 
     function scheduleSaveAppData(){
       clearTimeout(driveSaveTimer);
       setDriveStatus('저장 예약됨');
-      driveSaveTimer=setTimeout(()=>saveAppDataNow().catch(e=>console.error(e)),900);
+      driveSaveTimer=setTimeout(()=>queueDriveSave(saveAppDataNow).catch(e=>console.error(e)),900);
     }
 
     async function loadAppDataFromDrive(){
@@ -647,7 +654,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         clearTimeout(notesTimer);
       }
       clearTimeout(driveSaveTimer);
-      await saveAppDataNow();
+      await queueDriveSave(saveAppDataNow);
     };
     window.cloudSetActiveNotesTab=async(tabId)=>{ window.__notesActiveTabId=tabId; scheduleSaveAppData(); };
     window.cloudAddNotesTab=async({id,name})=>{ const list=window.__notesTabList||[]; const max=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0); window.__notesTabList=[...list,{id,name,order:max+10}]; window.__notesActiveTabId=id; window.__notesTabs=window.__notesTabs||{}; window.__notesTabs[id]=''; renderEverything(); scheduleSaveAppData(); };

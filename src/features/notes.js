@@ -20,27 +20,29 @@ export function initNotes(){
   });
 
   const setActive = async (tabId)=>{
-    // 1) 현재 탭 내용을 먼저 로컬/클라우드에 확정 저장 (탭 전환 중 유실 방지)
+    // 1) 현재 탭 내용은 로컬에 즉시 반영하고, Drive 저장은 백그라운드로 넘깁니다.
     const prevId = window.__notesActiveTabId || 'memo';
     try{
       if(notesArea){
         window.__notesTabs = window.__notesTabs || {};
         window.__notesTabs[prevId] = notesArea.value ?? '';
-        // 디바운스가 남아있더라도 이전 탭은 즉시 저장(최소 1회 보장)
+        const prevValue = window.__notesTabs[prevId];
         if(window.cloudSaveNotesNow){
-          await window.cloudSaveNotesNow(prevId, window.__notesTabs[prevId]);
+          window.cloudSaveNotesNow(prevId, prevValue).catch(e=>console.error(e));
         }else if(window.cloudSaveNotesFor){
-          await window.cloudSaveNotesFor(prevId, window.__notesTabs[prevId]);
+          Promise.resolve(window.cloudSaveNotesFor(prevId, prevValue)).catch(e=>console.error(e));
         }else if(window.cloudSaveNotes){
-          await window.cloudSaveNotes();
+          Promise.resolve(window.cloudSaveNotes()).catch(e=>console.error(e));
         }
       }
     }catch(_){}
 
-    // 2) active tab 변경 + 서버에 activeId 기록
+    // 2) active tab 변경은 즉시 처리하고, activeId 저장도 백그라운드로 예약합니다.
     window.__notesActiveTabId = tabId;
     try{
-      window.cloudSetActiveNotesTab && await window.cloudSetActiveNotesTab(tabId);
+      if(window.cloudSetActiveNotesTab){
+        Promise.resolve(window.cloudSetActiveNotesTab(tabId)).catch(e=>console.error(e));
+      }
     }catch(_){}
 
     // 3) UI 갱신
