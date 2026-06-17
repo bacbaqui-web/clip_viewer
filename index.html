@@ -550,6 +550,12 @@ body{padding-bottom:76px}
 .clip-page{width:690px;max-width:100vw;height:auto;display:block;margin:0 auto;background:#222}
 .clip-message{width:100%;min-height:260px;display:flex;align-items:center;justify-content:center;text-align:center;color:#888;line-height:1.6;background:#1b1b1b;border:1px dashed #555;border-radius:12px;padding:28px}
 .clip-status{font-size:.78rem;color:#bbb;line-height:1.45;text-align:center;white-space:pre-wrap}
+.drive-save-indicator{position:fixed;right:14px;bottom:14px;z-index:1200;background:rgba(0,0,0,.78);border:1px solid #444;border-radius:999px;padding:8px 12px;font-size:.78rem;color:#ddd;display:none;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.drive-save-indicator.show{display:block}
+@media (max-width:768px){
+  .pc-only{display:none!important}
+  #clipLoadDriveBtn{font-weight:900}
+}
 
   </style>
 </head>
@@ -633,16 +639,16 @@ body{padding-bottom:76px}
   <div id="clipviewer-section" class="section-card tab-content text-left">
     <div class="clip-viewer-panel">
       <div class="clip-toolbar">
-        <label class="clip-file-btn" title="CLIP 폴더 열기">
+        <label class="clip-file-btn pc-only" title="CLIP 폴더 열기">
           <input id="clipFolderInput" type="file" webkitdirectory directory multiple />
           📂 폴더 열기
         </label>
-        <button id="clipRefreshBtn" class="clip-btn" type="button">🔄 다시 읽기</button>
-        <button id="clipUploadDriveBtn" class="clip-btn" type="button">☁️ Drive 업로드</button>
+        <button id="clipRefreshBtn" class="clip-btn pc-only" type="button">🔄 다시 읽기</button>
+        <button id="clipUploadDriveBtn" class="clip-btn pc-only" type="button">☁️ Drive 업로드</button>
         <button id="clipLoadDriveBtn" class="clip-btn" type="button">📥 Drive 최신보기</button>
         <button id="clipClearBtn" class="clip-btn" type="button">🗑 초기화</button>
       </div>
-      <div id="clipStatus" class="clip-status">PC에서는 CLIP 폴더를 열고 Drive 업로드를 누르세요.\n다른 기기에서는 같은 구글 계정으로 로그인 후 Drive 최신보기를 누르면 됩니다.</div>
+      <div id="clipStatus" class="clip-status">PC에서는 CLIP 폴더를 열고 Drive 업로드를 누르세요.\n폰/다른 기기에서는 로그인하면 최신 Drive 원고가 자동으로 표시됩니다.</div>
       <div id="clipMessage" class="clip-message">CLIP 파일이 들어있는 폴더를 선택하세요.</div>
       <div id="clipViewer" class="clip-viewer"></div>
     </div>
@@ -853,6 +859,8 @@ body{padding-bottom:76px}
       </div>
     </div>
   </div>
+
+  <div id="driveSaveIndicator" class="drive-save-indicator">대기 중</div>
 
   <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-[1001] flex items-center justify-center hidden">
     <div class="flex flex-col items-center">
@@ -3744,6 +3752,7 @@ function initBookmarks(){
     const signOutBtn=document.getElementById('signOutBtn');
     const userInfoEl=document.getElementById('userInfo');
     const loadingOverlay=document.getElementById('loading-overlay');
+    const driveSaveIndicator=document.getElementById('driveSaveIndicator');
 
     let googleTokenClient=null;
     let driveAccessToken=null;
@@ -3763,6 +3772,19 @@ function initBookmarks(){
     function nowMs(){ return Date.now(); }
     function driveTimestamp(ms){ return { toMillis:()=>Number(ms||0) }; }
     function genId(prefix='id'){ return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
+
+    let driveStatusTimer=null;
+    function setDriveStatus(text, autoHide=true){
+      if(!driveSaveIndicator) return;
+      driveSaveIndicator.textContent=text;
+      driveSaveIndicator.classList.add('show');
+      clearTimeout(driveStatusTimer);
+      if(autoHide){
+        driveStatusTimer=setTimeout(()=>driveSaveIndicator.classList.remove('show'),1800);
+      }
+    }
+    function setDriveBusy(text){ setDriveStatus(text,false); }
+    function hideDriveStatus(){ if(driveSaveIndicator) driveSaveIndicator.classList.remove('show'); }
 
     function getDefaultAppData(){
       return {
@@ -3928,6 +3950,14 @@ function initBookmarks(){
       return data.files?.[0] || null;
     }
 
+    async function listDriveFilesInFolder(parentId){
+      if(!parentId) return [];
+      const q=[`'${parentId}' in parents`,'trashed=false'];
+      const url='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q.join(' and '))+'&fields=files(id,name,mimeType,modifiedTime)&spaces=drive&pageSize=1000';
+      const data=await driveFetch(url).then(r=>r.json());
+      return data.files || [];
+    }
+
     async function createDriveFolder(name,parentId=null){
       const meta={name,mimeType:'application/vnd.google-apps.folder'};
       if(parentId) meta.parents=[parentId];
@@ -4011,19 +4041,28 @@ function initBookmarks(){
 
     async function saveAppDataNow(){
       if(!driveReady || !driveAccessToken) return;
-      const folders=await ensureDriveFolders();
-      const data=buildAppData();
-      currentAppData=data;
-      const parts=splitAppDataForDrive(data);
-      await saveJsonToDrive(folders.calendar.id,DRIVE_CALENDAR_FILE,parts.calendar);
-      await saveJsonToDrive(folders.notes.id,DRIVE_NOTES_FILE,parts.notes);
-      await saveJsonToDrive(folders.bookmarks.id,DRIVE_BOOKMARKS_FILE,parts.bookmarks);
-      await saveJsonToDrive(folders.workmusic.id,DRIVE_WORKMUSIC_FILE,parts.workmusic);
-      await saveJsonToDrive(folders.clipviewer.id,DRIVE_CLIP_FILE,parts.clipviewer);
+      setDriveBusy('Google Drive 저장 중...');
+      try{
+        const folders=await ensureDriveFolders();
+        const data=buildAppData();
+        currentAppData=data;
+        const parts=splitAppDataForDrive(data);
+        await saveJsonToDrive(folders.calendar.id,DRIVE_CALENDAR_FILE,parts.calendar);
+        await saveJsonToDrive(folders.notes.id,DRIVE_NOTES_FILE,parts.notes);
+        await saveJsonToDrive(folders.bookmarks.id,DRIVE_BOOKMARKS_FILE,parts.bookmarks);
+        await saveJsonToDrive(folders.workmusic.id,DRIVE_WORKMUSIC_FILE,parts.workmusic);
+        await saveJsonToDrive(folders.clipviewer.id,DRIVE_CLIP_FILE,parts.clipviewer);
+        setDriveStatus('Google Drive 저장 완료');
+      }catch(e){
+        console.error(e);
+        setDriveStatus('Drive 저장 실패', true);
+        throw e;
+      }
     }
     function scheduleSaveAppData(){
       clearTimeout(driveSaveTimer);
-      driveSaveTimer=setTimeout(()=>saveAppDataNow().catch(e=>console.error(e)),700);
+      setDriveStatus('저장 예약됨');
+      driveSaveTimer=setTimeout(()=>saveAppDataNow().catch(e=>console.error(e)),900);
     }
 
     async function loadAppDataFromDrive(){
@@ -4078,6 +4117,7 @@ function initBookmarks(){
         driveReady=true; window.isAuthReady=true;
         await loadAppDataFromDrive();
         renderEverything();
+        await loadClipPagesFromDrive(true);
         showFeedbackMessage('Google Drive 데이터를 불러왔습니다.');
       }catch(e){
         console.error(e); showAlert('Google Drive 데이터 로드 실패: '+(e.message||e));
@@ -4091,6 +4131,9 @@ function initBookmarks(){
       window.isAuthReady=true;
       window.customTasks=[]; window.taskStatus={}; window.imageBookmarks=[]; window.__notesTabs={}; window.__notesTabList=[{id:'memo',name:'메모',order:0}]; window.__notesActiveTabId='memo'; window.__bookmarkTabList=[{id:'default',name:'기본',order:0}]; window.__bookmarkActiveTabId='default'; window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; window.__workMusicActiveTabId='default'; window.workMusicSongs=[];
       renderEverything();
+      if(typeof clearClipLocal==='function') clearClipLocal();
+      if(typeof showClipMessage==='function') showClipMessage('로그인하면 Drive에 저장된 CLIP 원고가 표시됩니다.');
+      if(typeof setClipStatus==='function') setClipStatus('로그아웃됨');
     };
 
     window.ensureLogin=()=>{
@@ -4234,7 +4277,12 @@ function initBookmarks(){
 
     // 자동 초기 상태
     window.isAuthReady=true;
-    setTimeout(()=>setupTokenClient(),500);
+    setTimeout(async()=>{
+      await setupTokenClient();
+      if(!driveAccessToken){
+        setClipStatus('구글 로그인하면 Drive 데이터를 자동으로 불러옵니다.');
+      }
+    },500);
 
     initCalendar();
     initNotes();
