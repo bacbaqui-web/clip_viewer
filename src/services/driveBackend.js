@@ -41,6 +41,8 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     let appDataFileId=null;
     let driveSaveTimer=null;
     let driveSaveQueue=Promise.resolve();
+    let notesSaveRunPromise=null;
+    let notesSaveQueued=false;
     let driveImageUrlCache=new Map();
     window.__unsubs=[];
 
@@ -546,6 +548,20 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       return run;
     }
 
+    function queueNotesSave(){
+      notesSaveQueued=true;
+      if(notesSaveRunPromise) return notesSaveRunPromise;
+      notesSaveRunPromise=queueDriveSave(async()=>{
+        while(notesSaveQueued){
+          notesSaveQueued=false;
+          await saveNotesDataNow();
+        }
+      }).finally(()=>{
+        notesSaveRunPromise=null;
+      });
+      return notesSaveRunPromise;
+    }
+
     function scheduleSaveNonNotesData(){
       clearTimeout(driveSaveTimer);
       setDriveStatus('로컬 반영됨 · Drive 저장 예약됨');
@@ -561,7 +577,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     function scheduleSaveNotesData(){
       clearTimeout(driveSaveTimer);
       setDriveStatus('메모 저장 예약됨');
-      driveSaveTimer=setTimeout(()=>queueDriveSave(saveNotesDataNow).catch(e=>console.error(e)),SAVE_DELAY_MS);
+      driveSaveTimer=setTimeout(()=>queueNotesSave().catch(e=>console.error(e)),SAVE_DELAY_MS);
     }
 
     async function loadAppDataFromDrive(){
@@ -683,9 +699,9 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         clearTimeout(notesTimer);
       }
       clearTimeout(driveSaveTimer);
-      await queueDriveSave(saveNotesDataNow);
+      await queueNotesSave();
     };
-    window.cloudSetActiveNotesTab=async(tabId)=>{ window.__notesActiveTabId=tabId; scheduleSaveNotesData(); };
+    window.cloudSetActiveNotesTab=async(tabId)=>{ window.__notesActiveTabId=tabId; if(!notesSaveRunPromise) scheduleSaveNotesData(); };
     window.cloudAddNotesTab=async({id,name})=>{ const list=window.__notesTabList||[]; const max=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0); window.__notesTabList=[...list,{id,name,order:max+10}]; window.__notesActiveTabId=id; window.__notesTabs=window.__notesTabs||{}; window.__notesTabs[id]=''; renderEverything(); scheduleSaveNotesData(); };
     window.cloudRenameNotesTab=async(tabId,newName)=>{ window.__notesTabList=(window.__notesTabList||[]).map(t=>t.id===tabId?{...t,name:newName}:t); renderEverything(); scheduleSaveNotesData(); };
     window.cloudReorderNotesTabs=async(list)=>{ window.__notesTabList=list; renderEverything(); scheduleSaveNotesData(); };
