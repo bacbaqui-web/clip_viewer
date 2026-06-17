@@ -7,7 +7,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     const DRIVE_FOLDERS = DRIVE_CONFIG.folders || {};
     const DRIVE_FILES = DRIVE_CONFIG.files || {};
     const DRIVE_SCOPE = DRIVE_CONFIG.scope || 'https://www.googleapis.com/auth/drive.file';
-    const DRIVE_APP_FOLDER = DRIVE_FOLDERS.app || '코믹서포터';
+    const DRIVE_APP_FOLDER = DRIVE_FOLDERS.app || 'magamiscoming';
     const DRIVE_SYSTEM_FOLDER = DRIVE_FOLDERS.system || 'system';
     const DRIVE_CALENDAR_FOLDER = DRIVE_FOLDERS.calendar || '달력';
     const DRIVE_NOTES_FOLDER = DRIVE_FOLDERS.notes || '메모';
@@ -701,7 +701,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       const d=new Date();
       const pad=(n)=>String(n).padStart(2,'0');
       const stamp=`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-      downloadTextFile(`comic_supporter_backup_${stamp}.json`,JSON.stringify(buildAppData(),null,2),'application/json;charset=utf-8');
+      downloadTextFile(`magamiscoming_backup_${stamp}.json`,JSON.stringify(buildAppData(),null,2),'application/json;charset=utf-8');
       window.showFeedbackMessage?.('전체 데이터 JSON 백업을 다운로드했습니다.');
     };
 
