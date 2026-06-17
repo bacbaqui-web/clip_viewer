@@ -30,6 +30,8 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     const signInBtn=document.getElementById('signInBtn');
     const signOutBtn=document.getElementById('signOutBtn');
     const userInfoEl=document.getElementById('userInfo');
+    const userAvatarEl=document.getElementById('userAvatar');
+    const userAvatarFallbackEl=document.getElementById('userAvatarFallback');
     const loadingOverlay=document.getElementById('loading-overlay');
     const driveSaveIndicator=document.getElementById('driveSaveIndicator');
 
@@ -53,6 +55,39 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     function nowMs(){ return Date.now(); }
     function driveTimestamp(ms){ return { toMillis:()=>Number(ms||0) }; }
     function genId(prefix='id'){ return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
+
+    function downloadTextFile(fileName,text,mimeType='text/plain;charset=utf-8'){
+      const content=String(mimeType).includes('json') ? text : '\ufeff'+text;
+      const blob=new Blob([content],{type:mimeType});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+
+    function updateProfileUI(user=null){
+      if(userInfoEl){
+        userInfoEl.textContent=user
+          ? `${user.name || '로그인됨'} (${user.email || ''})`
+          : 'Google 로그인 후 Drive 데이터를 동기화할 수 있습니다.';
+      }
+      if(userAvatarEl && userAvatarFallbackEl){
+        if(user?.picture){
+          userAvatarEl.src=user.picture;
+          userAvatarEl.classList.remove('hidden');
+          userAvatarFallbackEl.classList.add('hidden');
+        }else{
+          userAvatarEl.removeAttribute('src');
+          userAvatarEl.classList.add('hidden');
+          userAvatarFallbackEl.textContent=user?.name?.trim()?.[0] || '?';
+          userAvatarFallbackEl.classList.remove('hidden');
+        }
+      }
+    }
 
     let driveStatusTimer=null;
     function setDriveStatus(text, autoHide=true){
@@ -630,7 +665,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       loadingOverlay.classList.remove('hidden');
       try{
         driveUser=await getUserProfile();
-        userInfoEl.textContent=`${driveUser.name || '로그인됨'} (${driveUser.email || ''})`;
+        updateProfileUI(driveUser);
         signInBtn.classList.add('hidden');
         signOutBtn.classList.remove('hidden');
         driveReady=true; window.isAuthReady=true;
@@ -646,7 +681,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     signInBtn.onclick=()=>doSignIn();
     signOutBtn.onclick=()=>{
       driveAccessToken=null; driveReady=false; driveUser=null; driveFolders=null; appDataFileId=null;
-      userInfoEl.textContent=''; signOutBtn.classList.add('hidden'); signInBtn.classList.remove('hidden');
+      updateProfileUI(null); signOutBtn.classList.add('hidden'); signInBtn.classList.remove('hidden');
       window.isAuthReady=true;
       window.customTasks=[]; window.taskStatus={}; window.imageBookmarks=[]; window.__notesTabs={}; window.__notesTabList=[{id:'memo',name:'메모',order:0}]; window.__notesActiveTabId='memo'; window.__bookmarkTabList=[{id:'default',name:'기본',order:0}]; window.__bookmarkActiveTabId='default'; window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; window.__workMusicActiveTabId='default'; window.workMusicSongs=[];
       renderEverything();
@@ -659,6 +694,15 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       if(!window.isAuthReady){ window.showAlert('데이터 로딩 중입니다.'); return false; }
       if(!driveAccessToken){ window.showAlert('구글 로그인 후 이용해 주세요.'); return false; }
       return true;
+    };
+    updateProfileUI(null);
+
+    window.downloadAppDataBackup=()=>{
+      const d=new Date();
+      const pad=(n)=>String(n).padStart(2,'0');
+      const stamp=`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+      downloadTextFile(`comic_supporter_backup_${stamp}.json`,JSON.stringify(buildAppData(),null,2),'application/json;charset=utf-8');
+      window.showFeedbackMessage?.('전체 데이터 JSON 백업을 다운로드했습니다.');
     };
 
     // ===== 기존 UI가 호출하는 저장 함수들을 Drive 저장으로 연결 =====

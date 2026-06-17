@@ -154,6 +154,7 @@ export function initNotes(){
   if(downloadNotesBtn){
     downloadNotesBtn.addEventListener('click', downloadAllNotes);
   }
+  window.downloadAllNotesBackup = downloadAllNotes;
 
   // Events: select / rename / delete
   tabsContainer.addEventListener('click', async (e)=>{

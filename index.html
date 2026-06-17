@@ -9,18 +9,52 @@
   <link rel="stylesheet" href="styles.css"/>
 </head>
 <body class="text-white">
-  <div id="authBar" class="w-full max-w-2xl mx-auto flex items-center justify-end gap-2 mb-4">
-    <span id="userInfo" class="text-sm opacity-80"></span>
-    <button id="signInBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">Google 로그인</button>
-    <button id="signOutBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded hidden">로그아웃</button>
+  <div id="main-tabs" class="notepad-tabs mx-auto">
+    <button class="notepad-tab" data-tab="profile" title="프로필" aria-label="프로필">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+    <button class="notepad-tab active" data-tab="calendar" title="달력" aria-label="달력">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>
+    </button>
+    <button class="notepad-tab" data-tab="notes" title="메모" aria-label="메모">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>
+    </button>
+    <button class="notepad-tab" data-tab="bookmarks" title="북마크" aria-label="북마크">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21 12 17 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <button class="notepad-tab" data-tab="workmusic" title="노동요" aria-label="노동요">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    </button>
+    <button class="notepad-tab" data-tab="clipviewer" title="클립뷰어" aria-label="클립뷰어">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10"/><path d="M7 13h6"/></svg>
+    </button>
   </div>
 
-  <div id="main-tabs" class="notepad-tabs mx-auto">
-    <button class="notepad-tab active" data-tab="calendar">달력</button>
-    <button class="notepad-tab" data-tab="notes">메모</button>
-    <button class="notepad-tab" data-tab="bookmarks">북마크</button>
-    <button class="notepad-tab" data-tab="workmusic">노동요</button>
-    <button class="notepad-tab" data-tab="clipviewer">클립뷰어</button>
+  <div id="profile-section" class="section-card tab-content">
+    <div class="profile-panel">
+      <div class="profile-card">
+        <div class="profile-avatar-wrap">
+          <img id="userAvatar" class="profile-avatar hidden" alt="Google 프로필 사진">
+          <div id="userAvatarFallback" class="profile-avatar-fallback">?</div>
+        </div>
+        <div class="profile-copy">
+          <div class="profile-title">프로필</div>
+          <div id="userInfo" class="profile-user-info">Google 로그인 후 Drive 데이터를 동기화할 수 있습니다.</div>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <button id="signInBtn" class="profile-action-btn primary">Google 로그인</button>
+        <button id="signOutBtn" class="profile-action-btn hidden">로그아웃</button>
+      </div>
+      <div class="profile-backup-card">
+        <div class="profile-backup-title">백업</div>
+        <div class="profile-backup-desc">현재 브라우저에 불러온 데이터를 파일로 내려받습니다.</div>
+        <div class="profile-backup-actions">
+          <button id="backupNotesBtn" class="profile-action-btn">메모 전체 txt 백업</button>
+          <button id="backupAllDataBtn" class="profile-action-btn">전체 데이터 json 백업</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="calendar-section" class="section-card tab-content active">
@@ -92,7 +126,7 @@
           <input id="clipFolderInput" type="file" webkitdirectory directory multiple />
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v1H3z"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1.5H7A2 2 0 0 1 5 18z"/></svg>
         </label>
-        <button id="clipRefreshBtn" class="clip-btn pc-only" type="button" title="다시 읽기" aria-label="다시 읽기">
+        <button id="clipRefreshBtn" class="clip-btn" type="button" title="다시 읽기" aria-label="다시 읽기">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2"/><path d="M3 12A9 9 0 0 1 18.5 5.8"/><path d="M18 2v4h4"/><path d="M6 22v-4H2"/></svg>
         </button>
         <button id="clipClearBtn" class="clip-btn" type="button" title="초기화" aria-label="초기화">
@@ -356,6 +390,8 @@
     window.showFeedbackMessage = showFeedbackMessage;
     window.showAlert = showAlert;
     document.getElementById('modal-close-btn').addEventListener('click', hideAlert);
+    document.getElementById('backupNotesBtn')?.addEventListener('click',()=>window.downloadAllNotesBackup?.());
+    document.getElementById('backupAllDataBtn')?.addEventListener('click',()=>window.downloadAppDataBackup?.());
 
     function showTab(tabId){
       tabContents.forEach(c=>c.classList.remove('active'));

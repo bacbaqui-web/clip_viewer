@@ -1,9 +1,27 @@
     body{font-family:'Noto Sans KR',sans-serif;background:#000;color:#fff;display:flex;justify-content:flex-start;align-items:center;min-height:100vh;padding:16px;flex-direction:column;gap:0}
     .tab-content{display:none}.tab-content.active{display:flex;flex-direction:column;flex-grow:1}
     .section-card{background:#2a2a2a;border-radius:12px;padding:20px;box-shadow:inset 0 0 10px rgba(0,0,0,.3);text-align:center;width:100%;max-width:800px}
-    .notepad-tabs{display:flex;justify-content:center;align-items:center;gap:1rem;width:100%;max-width:800px}
-    .notepad-tab{background:#1a1a1a;padding:8px 16px;border-radius:8px 8px 0 0;cursor:pointer;transition:.2s;font-weight:700;color:#737373;font-size:.85rem}
+    .notepad-tabs{display:flex;justify-content:center;align-items:center;gap:.65rem;width:100%;max-width:800px}
+    .notepad-tab{background:#1a1a1a;width:44px;height:38px;padding:0;border-radius:10px 10px 0 0;cursor:pointer;transition:.2s;font-weight:700;color:#737373;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box}
+    .notepad-tab svg{width:20px;height:20px}
     .notepad-tab.active,.notepad-tab:hover{background:#2a2a2a;color:#fff}
+
+    .profile-panel{display:flex;flex-direction:column;gap:16px;width:100%;text-align:left}
+    .profile-card,.profile-backup-card{background:#1f1f1f;border:1px solid #3a3a3a;border-radius:16px;padding:18px;box-shadow:inset 0 0 12px rgba(0,0,0,.22)}
+    .profile-card{display:flex;align-items:center;gap:16px}
+    .profile-avatar-wrap{width:72px;height:72px;flex:0 0 72px;position:relative}
+    .profile-avatar,.profile-avatar-fallback{width:72px;height:72px;border-radius:999px;border:1px solid #555;background:#303030;display:flex;align-items:center;justify-content:center;object-fit:cover;color:#aaa;font-size:1.5rem;font-weight:900}
+    .profile-avatar.hidden,.profile-avatar-fallback.hidden{display:none}
+    .profile-copy{min-width:0}
+    .profile-title{font-size:1.1rem;font-weight:900;color:#fff;margin-bottom:4px}
+    .profile-user-info{font-size:.9rem;color:#c7c7c7;line-height:1.45;word-break:break-word}
+    .profile-actions,.profile-backup-actions{display:flex;flex-wrap:wrap;gap:8px}
+    .profile-action-btn{background:#3a3a3a;border:1px solid #555;color:#fff;border-radius:999px;padding:10px 14px;font-size:.86rem;font-weight:900;cursor:pointer;transition:background .2s,transform .15s}
+    .profile-action-btn:hover{background:#4a4a4a;transform:translateY(-1px)}
+    .profile-action-btn.primary{background:#2563eb;border-color:#3b82f6}
+    .profile-action-btn.primary:hover{background:#1d4ed8}
+    .profile-backup-title{font-size:1rem;font-weight:900;color:#fff}
+    .profile-backup-desc{margin:4px 0 12px;color:#aaa;font-size:.85rem;line-height:1.45}
 
     /* ===== 메모(내부) 탭 전용 스타일: 메인 탭(.notepad-tab)과 분리 ===== */
 /* 메모 공간과 분리된 '둥근 네모' 탭 */
@@ -476,8 +494,8 @@ body{padding-bottom:76px}
 
 
     @media (max-width:768px){
-      body{padding:12px;gap:0}.section-card{padding:12px;border-radius:0}
-      .notepad-tabs{gap:.5rem}.notepad-tab{padding:6px 12px;font-size:.8rem}
+      body{padding:12px 0 76px;gap:0;align-items:stretch}.section-card{width:100vw;max-width:none;padding:12px;border-radius:0;box-sizing:border-box}
+      .notepad-tabs{width:100vw;max-width:none;justify-content:flex-start;gap:.5rem;overflow-x:auto;padding:0 8px}.notepad-tab{padding:6px 12px;font-size:.8rem;flex:0 0 auto}
       .calendar-day{min-height:120px;padding:.35rem .2rem .2rem;gap:1px}.day-number{font-size:.75rem;min-width:14px}.day-top{gap:2px;min-height:24px}.daily-check-btn{font-size:.62rem;padding:3px 0}.calendar-month-counts{display:flex;margin-left:0;margin-top:4px;justify-content:center;font-size:.72rem}
       .task-item{font-size:.85rem;padding:2px 4px;margin-top:2px}
       .calendar-grid,.calendar-header{gap:0}.add-task-btn{width:100%;font-size:.9rem}

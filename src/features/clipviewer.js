@@ -205,7 +205,18 @@ export function initClipViewer({
   }
 
   clipFolderInput?.addEventListener('change',async(e)=>{ clipFiles=Array.from(e.target.files||[]); await loadClipFiles(clipFiles); });
-  clipRefreshBtn?.addEventListener('click',async()=>{ if(!clipFiles.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; } await loadClipFiles(clipFiles); });
+  clipRefreshBtn?.addEventListener('click',async()=>{
+    if(isMobileView()){
+      if(!ensureLogin()) return;
+      setClipStatus('Drive 최신 미리보기 확인 중...');
+      await loadAppDataFromDrive();
+      renderEverything();
+      await loadClipPagesFromDrive(true);
+      return;
+    }
+    if(!clipFiles.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; }
+    await loadClipFiles(clipFiles);
+  });
   clipClearBtn?.addEventListener('click',()=>{ clipFiles=[]; if(clipFolderInput) clipFolderInput.value=''; clearClipLocal(); showClipMessage(getEmptyClipMessage()); setClipStatus(''); });
   attachClipDropZone(clipMessage);
   attachClipDropZone(clipViewer);
