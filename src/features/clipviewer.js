@@ -1,5 +1,6 @@
 export function initClipViewer({
   ensureLogin = () => window.ensureLogin?.(),
+  isDriveLoggedIn = () => false,
   ensureClipCurrentFolder,
   findDriveFile,
   uploadDriveMultipart,
@@ -18,10 +19,17 @@ export function initClipViewer({
   let clipFiles=[];
   let clipLocalPages=[];
   let clipSQLPromise=null;
-  const EMPTY_CLIP_MESSAGE = `
-    <div class="clip-empty-title">CLIP 폴더를 열어주세요</div>
-    <div class="clip-empty-body">원고가 들어있는 폴더를 이곳에 끌어다 놓거나, 위의 폴더 아이콘으로 선택하면 미리보기를 펼쳐볼 수 있습니다.</div>
-  `;
+  let clipAutoSyncRunning=false;
+  const isMobileView=()=>window.matchMedia?.('(max-width: 768px)').matches;
+  const getEmptyClipMessage=()=> isMobileView()
+    ? `
+      <div class="clip-empty-title">PC에서 올린 CLIP 미리보기를 확인하세요</div>
+      <div class="clip-empty-body">PC에서 CLIP 폴더를 열면 미리보기가 Drive에 저장되고, 모바일에서는 로그인만 하면 같은 화면을 볼 수 있습니다.</div>
+    `
+    : `
+      <div class="clip-empty-title">CLIP 폴더를 열어주세요</div>
+      <div class="clip-empty-body">원고가 들어있는 폴더를 이곳에 끌어다 놓거나, 위의 폴더 아이콘으로 선택하면 미리보기를 펼쳐볼 수 있습니다.</div>
+    `;
 
   function setClipStatus(t){ if(clipStatus) clipStatus.textContent=t; }
   function showClipMessage(t){ if(clipMessage){ clipMessage.style.display='flex'; clipMessage.innerHTML=t; } }
@@ -57,7 +65,14 @@ export function initClipViewer({
       try{ const blob=await extractClipPreview(file,SQL); if(!blob){fail++;continue;} const url=URL.createObjectURL(blob); const img=document.createElement('img'); img.className='clip-page'; img.alt=file.name; img.src=url; clipViewer.appendChild(img); clipLocalPages.push({name:file.name.replace(/\.clip$/i,'.png'),blob,url,type:blob.type}); ok++; if(ok===1) hideClipMessage(); }catch(e){ console.error(e); fail++; }
       await new Promise(r=>setTimeout(r,0));
     }
-    if(ok){ hideClipMessage(); setClipStatus(`완료\n표시: ${ok}개 / 실패: ${fail}개`); } else { showClipMessage('미리보기 이미지를 찾지 못했습니다.'); setClipStatus(`실패: ${fail}개`); }
+    if(ok){
+      hideClipMessage();
+      setClipStatus(`완료\n표시: ${ok}개 / 실패: ${fail}개`);
+      syncClipPagesToDriveIfReady();
+    } else {
+      showClipMessage('미리보기 이미지를 찾지 못했습니다.');
+      setClipStatus(`실패: ${fail}개`);
+    }
   }
 
   function readDirectoryEntries(reader){
@@ -143,7 +158,7 @@ export function initClipViewer({
     });
   }
 
-  async function uploadClipPagesToDrive(){
+  async function uploadClipPagesToDrive({auto=false}={}){
     if(!ensureLogin()) return;
     if(!clipLocalPages.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; }
     const clipCurrent=await ensureClipCurrentFolder();
@@ -156,13 +171,31 @@ export function initClipViewer({
     }
     await saveClipManifest(manifest);
     setClipStatus(`Drive 업로드 완료\n페이지: ${manifest.length}개`);
-    window.showFeedbackMessage?.('CLIP 미리보기가 Drive에 저장되었습니다.');
+    if(!auto) window.showFeedbackMessage?.('CLIP 미리보기가 Drive에 저장되었습니다.');
+  }
+
+  async function syncClipPagesToDriveIfReady(){
+    if(clipAutoSyncRunning || !clipLocalPages.length) return;
+    if(!isDriveLoggedIn()){
+      setClipStatus('로그인 후 CLIP 폴더를 다시 열면 Drive에 자동 저장됩니다.');
+      return;
+    }
+    clipAutoSyncRunning=true;
+    try{
+      await uploadClipPagesToDrive({auto:true});
+      window.showFeedbackMessage?.('다른 기기에서도 볼 수 있게 CLIP 미리보기를 저장했습니다.');
+    }catch(err){
+      console.error(err);
+      setClipStatus('CLIP Drive 자동 저장 실패');
+    }finally{
+      clipAutoSyncRunning=false;
+    }
   }
 
   async function loadClipPagesFromDrive(render=true){
     clearClipLocal();
     const pages=getClipPages();
-    if(!pages.length){ if(render) showClipMessage(EMPTY_CLIP_MESSAGE); return; }
+    if(!pages.length){ if(render) showClipMessage(getEmptyClipMessage()); return; }
     if(render) showClipMessage('Drive에서 CLIP 미리보기를 불러오는 중...');
     for(let i=0;i<pages.length;i++){
       const p=pages[i]; if(render) setClipStatus(`${i+1} / ${pages.length} Drive 다운로드 중\n${p.name}`);
@@ -173,9 +206,13 @@ export function initClipViewer({
 
   clipFolderInput?.addEventListener('change',async(e)=>{ clipFiles=Array.from(e.target.files||[]); await loadClipFiles(clipFiles); });
   clipRefreshBtn?.addEventListener('click',async()=>{ if(!clipFiles.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; } await loadClipFiles(clipFiles); });
-  clipClearBtn?.addEventListener('click',()=>{ clipFiles=[]; if(clipFolderInput) clipFolderInput.value=''; clearClipLocal(); showClipMessage(EMPTY_CLIP_MESSAGE); setClipStatus(''); });
+  clipClearBtn?.addEventListener('click',()=>{ clipFiles=[]; if(clipFolderInput) clipFolderInput.value=''; clearClipLocal(); showClipMessage(getEmptyClipMessage()); setClipStatus(''); });
   attachClipDropZone(clipMessage);
   attachClipDropZone(clipViewer);
+  showClipMessage(getEmptyClipMessage());
+  window.matchMedia?.('(max-width: 768px)').addEventListener?.('change',()=>{
+    if(!clipLocalPages.length) showClipMessage(getEmptyClipMessage());
+  });
 
   window.setClipStatus = setClipStatus;
   window.showClipMessage = showClipMessage;

@@ -788,6 +788,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     initWorkMusic?.();
     initClipViewer?.({
       ensureLogin,
+      isDriveLoggedIn: ()=>!!driveAccessToken,
       ensureClipCurrentFolder: async()=> (await ensureDriveFolders()).clipCurrent,
       findDriveFile,
       uploadDriveMultipart,
