@@ -537,6 +537,26 @@ body{padding-bottom:76px}
         max-width: 400px;
         box-shadow: 0 10px 30px rgba(0,0,0,.5);
     }
+
+
+/* ===== CLIP 뷰어 탭 ===== */
+.clip-viewer-panel{display:flex;flex-direction:column;gap:12px;align-items:center}
+.clip-toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;width:100%}
+.clip-btn,.clip-file-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#3a3a3a;border:1px solid #555;color:#fff;border-radius:999px;padding:9px 14px;font-size:.85rem;font-weight:800;cursor:pointer;transition:background .2s,transform .15s}
+.clip-btn:hover,.clip-file-btn:hover{background:#4a4a4a;transform:scale(1.02)}
+.clip-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.clip-file-btn input{display:none}
+.clip-viewer{width:690px;max-width:100vw;line-height:0;background:#111;margin:0 auto;border-radius:10px;overflow:hidden}
+.clip-page{width:690px;max-width:100vw;height:auto;display:block;margin:0 auto;background:#222}
+.clip-message{width:100%;min-height:260px;display:flex;align-items:center;justify-content:center;text-align:center;color:#888;line-height:1.6;background:#1b1b1b;border:1px dashed #555;border-radius:12px;padding:28px}
+.clip-status{font-size:.78rem;color:#bbb;line-height:1.45;text-align:center;white-space:pre-wrap}
+.drive-save-indicator{position:fixed;right:14px;bottom:14px;z-index:1200;background:rgba(0,0,0,.78);border:1px solid #444;border-radius:999px;padding:8px 12px;font-size:.78rem;color:#ddd;display:none;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.drive-save-indicator.show{display:block}
+@media (max-width:768px){
+  .pc-only{display:none!important}
+  #clipLoadDriveBtn{font-weight:900}
+}
+
   </style>
 </head>
 <body class="text-white">
@@ -551,6 +571,7 @@ body{padding-bottom:76px}
     <button class="notepad-tab" data-tab="notes">메모</button>
     <button class="notepad-tab" data-tab="bookmarks">북마크</button>
     <button class="notepad-tab" data-tab="workmusic">노동요</button>
+    <button class="notepad-tab" data-tab="clipviewer">클립뷰어</button>
   </div>
 
   <div id="calendar-section" class="section-card tab-content active">
@@ -615,6 +636,23 @@ body{padding-bottom:76px}
     <section id="image-grid"></section>
   </div>
 
+  <div id="clipviewer-section" class="section-card tab-content text-left">
+    <div class="clip-viewer-panel">
+      <div class="clip-toolbar">
+        <label class="clip-file-btn pc-only" title="CLIP 폴더 열기">
+          <input id="clipFolderInput" type="file" webkitdirectory directory multiple />
+          📂 폴더 열기
+        </label>
+        <button id="clipRefreshBtn" class="clip-btn pc-only" type="button">🔄 다시 읽기</button>
+        <button id="clipUploadDriveBtn" class="clip-btn pc-only" type="button">☁️ Drive 업로드</button>
+        <button id="clipLoadDriveBtn" class="clip-btn" type="button">📥 Drive 최신보기</button>
+        <button id="clipClearBtn" class="clip-btn" type="button">🗑 초기화</button>
+      </div>
+      <div id="clipStatus" class="clip-status">PC에서는 CLIP 폴더를 열고 Drive 업로드를 누르세요.\n폰/다른 기기에서는 로그인하면 최신 Drive 원고가 자동으로 표시됩니다.</div>
+      <div id="clipMessage" class="clip-message">CLIP 파일이 들어있는 폴더를 선택하세요.</div>
+      <div id="clipViewer" class="clip-viewer"></div>
+    </div>
+  </div>
 
 
   <div id="workmusic-section" class="section-card tab-content text-left">
@@ -822,6 +860,8 @@ body{padding-bottom:76px}
     </div>
   </div>
 
+  <div id="driveSaveIndicator" class="drive-save-indicator">대기 중</div>
+
   <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-[1001] flex items-center justify-center hidden">
     <div class="flex flex-col items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-white"></div>
@@ -829,11 +869,11 @@ body{padding-bottom:76px}
     </div>
   </div>
 
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+
 <script>
-  // ImgBB API Key (이미지 업로드용)
-    // const IMGBB_API_KEY = "f64175972f4e4178332db9ae8559969b"; // [수정 1] 더 이상 필요 없으므로 주석 처리
-    
-    // (이 아래 UI 스크립트 내용은 변경 사항 없음)
+  // Google Drive 저장 방식 버전
     
     // 전역 상태
     window.customTasks = window.customTasks || [];
@@ -985,7 +1025,7 @@ body{padding-bottom:76px}
         
         closeEditModal();
         showFeedbackMessage('제목이 저장되었습니다.');
-        // onSnapshot이 Firestore 업데이트를 감지하고 renderImageBookmarks를 호출할 것입니다.
+        renderImageBookmarks();
     };
 
 
@@ -1080,7 +1120,7 @@ body{padding-bottom:76px}
       }
       cancelBtn.addEventListener('click',closeModal);
       saveTaskBtn.addEventListener('click',saveTask);
-      // window.deleteTask는 Firebase 스크립트에서 정의됨
+      // window.deleteTask는 Google Drive 저장 레이어에서 정의됨
       deleteTaskBtn.addEventListener('click',()=>window.deleteTask&&window.deleteTask());
       taskModal.addEventListener('click',(e)=>{ if(e.target===taskModal) closeModal(); });
 
@@ -1420,14 +1460,13 @@ body{padding-bottom:76px}
       let sortedBookmarks = [...(window.imageBookmarks || [])].filter(d => (d.bookmarkTabId || 'default') === activeBookmarkTabId);
 
       // 최신순 고정
-      sortedBookmarks.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+      sortedBookmarks.sort((a, b) => ((b.timestamp?.toMillis?.() || b.timestampMs || 0) - (a.timestamp?.toMillis?.() || a.timestampMs || 0)));
 
       sortedBookmarks.forEach(d=>{
         const isVideo = d.type === 'video';
         const isLink = d.type === 'link'; // 일반 페이지 링크
         const isInstagram = d.type === 'instagram'; // 인스타그램 게시물
-        // [수정] type: 'imgbb' 또는 'firebase_storage' 또는 'remote'일 때가 이미지임
-        const isImage = d.type === 'imgbb' || d.type === 'firebase_storage' || d.type === 'remote';
+        const isImage = d.type === 'drive_image' || d.type === 'remote' || !!d.driveFileId;
         
         const isEditable = isVideo || isLink || isInstagram; // 제목 수정 가능한 항목
         const imageUrl = d.url;
@@ -3229,10 +3268,7 @@ body{padding-bottom:76px}
 </script>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    
+
 
 // ===== Inlined modules: calendar.js / notes.js / bookmarks.js =====
 // calendar.js
@@ -3692,323 +3728,101 @@ function initBookmarks(){
 }
 
 
-// ===== Inlined main.js =====
-    // [수정 2] Firebase Storage 모듈 임포트
-    import { 
-      getStorage, 
-      ref, 
-      uploadBytes, 
-      getDownloadURL, 
-      deleteObject 
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
-    // Firebase Config (***이 부분이 수정되었습니다***)
-    const firebaseConfig = {
-      apiKey: "AIzaSyCiwzde40jsz17CEz-rrMmmBrn-S6brdlE",
-      authDomain: "comicschedule-dfec7.firebaseapp.com",
-      projectId: "comicschedule-dfec7",
-      storageBucket: "comicschedule-dfec7.firebasestorage.app", // <-- 올바른 주소
-      messagingSenderId: "1004611276816", // <-- 사용자님이 주신 새 ID
-      appId: "1:1004611276816:web:aca83237bafa971ed1fa95", // <-- 사용자님이 주신 새 ID
-      measurementId: "G-ZNZZQRJZF9"
-    };
 
-    // ***이 부분이 수정되었습니다 (analytics 관련 코드 제거, 원본 코드로 복구)***
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const storage = getStorage(app); 
+// ===== Inlined main.js : Google Drive backend =====
+// 모든 데이터는 로그인한 사용자의 Google Drive 안에 저장됩니다.
+
+    const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+    const DRIVE_APP_FOLDER = '코믹서포터';
+    const DRIVE_CALENDAR_FOLDER = '달력';
+    const DRIVE_NOTES_FOLDER = '메모';
+    const DRIVE_BOOKMARKS_FOLDER = '북마크';
+    const DRIVE_BOOKMARK_IMAGES_FOLDER = ''; // 북마크 이미지 중간 폴더 사용 안 함
+    const DRIVE_WORKMUSIC_FOLDER = '노동요';
+    const DRIVE_CLIP_FOLDER = '클립뷰어';
+    const DRIVE_CLIP_CURRENT_FOLDER = 'current';
+    const DRIVE_CALENDAR_FILE = 'calendar.json';
+    const DRIVE_NOTES_FILE = 'notes-index.json';
+    const DRIVE_OLD_NOTES_FILE = 'notes.json';
+    const DRIVE_BOOKMARKS_FILE = 'bookmarks.json';
+    const DRIVE_WORKMUSIC_FILE = 'workmusic.json';
+    const DRIVE_CLIP_FILE = 'clipviewer.json';
+    const DEFAULT_GOOGLE_CLIENT_ID = '75399802933-ob5opqbukj1enr6v069rocbjo9508b35.apps.googleusercontent.com';
 
     const signInBtn=document.getElementById('signInBtn');
     const signOutBtn=document.getElementById('signOutBtn');
     const userInfoEl=document.getElementById('userInfo');
     const loadingOverlay=document.getElementById('loading-overlay');
-    const provider = new GoogleAuthProvider();
-    
-    // **도메인 추출 함수를 모듈 스코프에서 사용 가능하도록 재정의**
-    function extractDomain(url) {
-        if (!url) return 'Unknown';
-        try {
-            const urlObj = new URL(url.includes('://') ? url : 'https://' + url);
-            let domain = urlObj.hostname;
-            if (domain.startsWith('www.')) domain = domain.substring(4);
-            return domain;
-        } catch {
-            return 'Unknown';
-        }
+    const driveSaveIndicator=document.getElementById('driveSaveIndicator');
+
+    let googleTokenClient=null;
+    let driveAccessToken=null;
+    let driveUser=null;
+    let driveReady=false;
+    let driveFolders=null;
+    let appDataFileId=null;
+    let driveSaveTimer=null;
+    let driveImageUrlCache=new Map();
+    let clipSQLPromise=null;
+    window.__unsubs=[];
+
+    function getGoogleClientId(){
+      return DEFAULT_GOOGLE_CLIENT_ID;
     }
 
+    function nowMs(){ return Date.now(); }
+    function driveTimestamp(ms){ return { toMillis:()=>Number(ms||0) }; }
+    function genId(prefix='id'){ return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
 
-    async function doSignIn(){
-      try{ await signInWithPopup(auth,provider); }
-      catch(e){
-        if(e.code==='auth/popup-blocked'||e.code==='auth/unauthorized-domain'){ await signInWithRedirect(auth,provider); }
-        else{ document.getElementById('modal-message').textContent='로그인 오류: '+(e.message||e.code); document.getElementById('alert-modal').classList.remove('hidden'); }
+    let driveStatusTimer=null;
+    function setDriveStatus(text, autoHide=true){
+      if(!driveSaveIndicator) return;
+      driveSaveIndicator.textContent=text;
+      driveSaveIndicator.classList.add('show');
+      clearTimeout(driveStatusTimer);
+      if(autoHide){
+        driveStatusTimer=setTimeout(()=>driveSaveIndicator.classList.remove('show'),1800);
       }
     }
-    getRedirectResult(auth).catch(()=>{});
+    function setDriveBusy(text){ setDriveStatus(text,false); }
+    function hideDriveStatus(){ if(driveSaveIndicator) driveSaveIndicator.classList.remove('show'); }
 
-    signInBtn.onclick=()=>doSignIn();
-    signOutBtn.onclick=()=>signOut(auth);
-
-    window.cloudRefs=async ()=>{
-      const uid=auth.currentUser.uid;
-      const userPath=`users/${uid}`;
+    function getDefaultAppData(){
       return {
-        tasksCol: collection(db, `${userPath}/customTasks`),
-        stateDoc: doc(db, `${userPath}/meta/appState`),
-        imagesCol: collection(db, `${userPath}/images`), // 이미지/동영상/링크 북마크 통합 컬렉션
-      };
-    };
-
-    window.ensureLogin=()=>{
-      if(!window.isAuthReady){ document.getElementById('modal-message').textContent='데이터 로딩 중입니다.'; document.getElementById('alert-modal').classList.remove('hidden'); return false; }
-      if(!auth.currentUser){ document.getElementById('modal-message').textContent='로그인 후 이용해 주세요.'; document.getElementById('alert-modal').classList.remove('hidden'); return false; }
-      return true;
-    };
-
-    let notesTimer=null;
-    let notesPending=null; // {tabId, value}
-    window.cloudSaveNotesDebounced=function(tabId, value){
-      clearTimeout(notesTimer);
-      // 캡처된 값이 들어오면 그 값을 우선 저장(탭 전환 중 덮어쓰기 방지)
-      if(tabId){ notesPending = { tabId, value: value ?? '' }; }
-      notesTimer=setTimeout(()=>{
-        if(window.cloudSaveNotesFor && notesPending){
-          window.cloudSaveNotesFor(notesPending.tabId, notesPending.value);
-          notesPending=null;
-        }else if(window.cloudSaveNotes){
-          window.cloudSaveNotes();
+        version:1,
+        updatedAt:new Date().toISOString(),
+        customTasks:[],
+        imageBookmarks:[],
+        state:{
+          taskStatus:{},
+          notesTabList:[{id:'memo',name:'메모',order:0}],
+          notesTabs:{},
+          notesActiveTabId:'memo',
+          bookmarkTabList:[{id:'default',name:'기본',order:0}],
+          bookmarkActiveTabId:'default',
+          workMusicSongs:[],
+          workMusicMode:'sequential',
+          workMusicCurrentIndex:0,
+          workMusicVolume:80,
+          workMusicLastVolume:80,
+          workMusicIsMuted:false,
+          workMusicTabList:[{id:'default',name:'기본',order:0}],
+          workMusicActiveTabId:'default',
+          clipPages:[]
         }
-      },800);
-    };
+      };
+    }
 
-    window.cloudSaveAll=async ()=>{
-      if(!ensureLogin()) return;
-      const { tasksCol, stateDoc } = await cloudRefs();
-      window.taskStatus=window.taskStatus||{}; window.customTasks=window.customTasks||[];
-      await setDoc(stateDoc,{taskStatus:window.taskStatus},{merge:true});
-      // FireStore에서 setDoc은 문서 ID가 없으면 생성, 있으면 덮어쓰기/병합하므로 map/reduce 대신 setDoc 사용
-      const ops=window.customTasks.map(t=>setDoc(doc(tasksCol,String(t.id)),t,{merge:true}));
-      await Promise.all(ops);
-    };
+    let currentAppData=getDefaultAppData();
 
-    window.cloudSaveStateOnly=async ()=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      window.taskStatus=window.taskStatus||{};
-      await setDoc(stateDoc,{taskStatus:window.taskStatus},{merge:true});
-    };
-
-    window.cloudSaveNotes=async (tabIdArg, valueArg)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-
-      // 반드시 새 객체로 복사해서 저장 (참조 공유로 인한 예기치 않은 동기화 방지)
-      const notesTabs = { ...(prev.notesTabs || {}) };
-
-      // 저장 대상 탭 결정: 인자로 들어온 tabId를 우선
-      const activeId = tabIdArg || window.__notesActiveTabId || prev.notesActiveTabId || 'memo';
-
-      // 저장 값 결정: 인자로 들어온 value를 우선, 아니면 textarea 값
-      let nextValue = (valueArg !== undefined) ? valueArg : undefined;
-      if(nextValue === undefined){
-        const notesAreaEl=document.getElementById('notesArea');
-        if(notesAreaEl) nextValue = notesAreaEl.value ?? '';
-        else nextValue = '';
-      }
-
-      notesTabs[activeId] = nextValue;
-
-      // 로컬 캐시도 동일하게 맞춰둠(탭 전환 시 내용 유지)
-      window.__notesTabs = window.__notesTabs || {};
-      window.__notesTabs[activeId] = nextValue;
-
-      await setDoc(stateDoc,{notesTabs, notesActiveTabId: activeId},{merge:true});
-    };
-
-    // 명시적으로 특정 탭을 저장하는 래퍼(탭 전환/디바운스에서 사용)
-    window.cloudSaveNotesFor = async (tabId, value)=>{
-      return window.cloudSaveNotes(tabId, value);
-    };
-
-    // 메모 탭 CRUD (stateDoc 내부 notesTabList / notesTabs 사용)
-    window.cloudSetActiveNotesTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{ notesActiveTabId: tabId },{ merge:true });
-    };
-
-    window.cloudAddNotesTab = async ({id, name})=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      const list = Array.isArray(prev.notesTabList) ? prev.notesTabList : [];
-      const maxOrder = list.reduce((m,t)=>Math.max(m, Number(t.order||0)), 0);
-      const next = [...list, { id, name, order: maxOrder + 10 }];
-      await setDoc(stateDoc,{ notesTabList: next, notesActiveTabId: id },{ merge:true });
-    };
-
-    window.cloudRenameNotesTab = async (tabId, newName)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      const list = Array.isArray(prev.notesTabList) ? prev.notesTabList : [];
-      const next = list.map(t=> t.id===tabId ? ({...t, name:newName}) : t);
-      await setDoc(stateDoc,{ notesTabList: next },{ merge:true });
-    };
-
-    window.cloudReorderNotesTabs = async (orderedList)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      // orderedList는 [{id,name,order},...] 형태
-      await setDoc(stateDoc,{ notesTabList: orderedList },{ merge:true });
-    };
-
-    window.cloudDeleteNotesTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      const list = Array.isArray(prev.notesTabList) ? prev.notesTabList : [];
-      const notesTabs = prev.notesTabs || {};
-      const nextList = list.filter(t=>t.id!==tabId);
-      const nextNotes = {...notesTabs};
-      delete nextNotes[tabId];
-
-      // 최소 1개 탭 유지 (없어지면 기본 '메모' 생성)
-      let nextActive = prev.notesActiveTabId || window.__notesActiveTabId || 'memo';
-      if(nextActive===tabId){
-        nextActive = nextList[0]?.id || 'memo';
-      }
-      if(nextList.length===0){
-        nextList.push({ id:'memo', name:'메모', order:0 });
-        nextActive = 'memo';
-        // 기본 탭은 빈 메모
-        nextNotes['memo'] = nextNotes['memo'] || '';
-      }
-
-      await setDoc(stateDoc,{ notesTabList: nextList, notesTabs: nextNotes, notesActiveTabId: nextActive },{ merge:true });
-    };
-
-    // 북마크 탭 CRUD (stateDoc 내부 bookmarkTabList / bookmarkActiveTabId 사용)
-    window.cloudSetActiveBookmarkTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{ bookmarkActiveTabId: tabId },{ merge:true });
-    };
-    window.cloudAddBookmarkTab = async ({id, name})=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      const list=Array.isArray(prev.bookmarkTabList)&&prev.bookmarkTabList.length ? prev.bookmarkTabList : [{id:'default',name:'기본',order:0}];
-      const maxOrder=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0);
-      const next=[...list,{id,name,order:maxOrder+10}];
-      window.__bookmarkActiveTabId=id;
-      await setDoc(stateDoc,{ bookmarkTabList: next, bookmarkActiveTabId: id },{ merge:true });
-    };
-    window.cloudRenameBookmarkTab = async (tabId, newName)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      const list=Array.isArray(prev.bookmarkTabList)&&prev.bookmarkTabList.length ? prev.bookmarkTabList : [{id:'default',name:'기본',order:0}];
-      const next=list.map(t=>t.id===tabId?({...t,name:newName}):t);
-      await setDoc(stateDoc,{ bookmarkTabList: next },{ merge:true });
-    };
-    window.cloudReorderBookmarkTabs = async (orderedList)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{ bookmarkTabList: orderedList },{ merge:true });
-    };
-    window.cloudDeleteBookmarkTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc, imagesCol } = await cloudRefs();
-      const st=await getDoc(stateDoc);
-      const prev=st.exists()?(st.data()||{}):{};
-      let list=Array.isArray(prev.bookmarkTabList)&&prev.bookmarkTabList.length ? prev.bookmarkTabList : [{id:'default',name:'기본',order:0}];
-      let nextList=list.filter(t=>t.id!==tabId);
-      let nextActive=prev.bookmarkActiveTabId || window.__bookmarkActiveTabId || 'default';
-      if(nextList.length===0) nextList=[{id:'default',name:'기본',order:0}];
-      if(nextActive===tabId) nextActive=nextList[0].id;
-      const deletions=(window.imageBookmarks||[]).filter(b=>(b.bookmarkTabId||'default')===tabId).map(b=>deleteDoc(doc(imagesCol,b.id)));
-      await Promise.all(deletions);
-      await setDoc(stateDoc,{ bookmarkTabList: nextList, bookmarkActiveTabId: nextActive },{ merge:true });
-      showFeedbackMessage('북마크 탭을 삭제했습니다.');
-    };
-    window.moveBookmarkToTab = async (bookmarkId, tabId)=>{
-      if(!ensureLogin()) return;
-      const { imagesCol } = await cloudRefs();
-      await updateDoc(doc(imagesCol, bookmarkId), { bookmarkTabId: tabId || 'default' });
-    };
-
-
-
-    window.cloudEnsureWorkMusicDefaultTab = async ()=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st = await getDoc(stateDoc);
-      const prev = st.exists() ? (st.data() || {}) : {};
-      const hasTabs = Array.isArray(prev.workMusicTabList) && prev.workMusicTabList.length;
-      if(!hasTabs){
-        await setDoc(stateDoc,{
-          workMusicTabList: [{id:'default', name:'기본', order:0}],
-          workMusicActiveTabId: 'default'
-        },{ merge:true });
-      }
-    };
-
-    window.cloudSetActiveWorkMusicTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{ workMusicActiveTabId: tabId || 'default', workMusicCurrentIndex: 0 },{ merge:true });
-    };
-    window.cloudAddWorkMusicTab = async (tab)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st = await getDoc(stateDoc);
-      const prev = st.exists() ? (st.data() || {}) : {};
-      const list = Array.isArray(prev.workMusicTabList) && prev.workMusicTabList.length ? prev.workMusicTabList : [{id:'default',name:'기본',order:0}];
-      const order = Number.isFinite(Number(tab.order)) ? Number(tab.order) : (list.length ? Math.max(...list.map(t=>Number(t.order||0))) + 10 : 0);
-      const extra = { ...(tab.sourcePlaylistId ? {sourcePlaylistId:tab.sourcePlaylistId, sourceType:tab.sourceType || 'youtube-playlist'} : {}) };
-      const next = list.some(t=>t.id===tab.id) ? list.map(t=>t.id===tab.id ? {...t, name:tab.name, order, ...extra} : t) : [...list, {id:tab.id, name:tab.name, order, ...extra}];
-      await setDoc(stateDoc,{ workMusicTabList: next, workMusicActiveTabId: tab.id, workMusicCurrentIndex: 0 },{ merge:true });
-    };
-    window.cloudRenameWorkMusicTab = async (tabId, name)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st = await getDoc(stateDoc);
-      const prev = st.exists() ? (st.data() || {}) : {};
-      const list = Array.isArray(prev.workMusicTabList) && prev.workMusicTabList.length ? prev.workMusicTabList : [{id:'default',name:'기본',order:0}];
-      await setDoc(stateDoc,{ workMusicTabList: list.map(t=>t.id===tabId ? {...t, name} : t) },{ merge:true });
-    };
-    window.cloudReorderWorkMusicTabs = async (orderedList)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{ workMusicTabList: orderedList },{ merge:true });
-    };
-    window.cloudDeleteWorkMusicTab = async (tabId)=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      const st = await getDoc(stateDoc);
-      const prev = st.exists() ? (st.data() || {}) : {};
-      let list = Array.isArray(prev.workMusicTabList) && prev.workMusicTabList.length ? prev.workMusicTabList : [{id:'default',name:'기본',order:0}];
-      let nextList = list.filter(t=>t.id !== tabId);
-      if(nextList.length === 0) nextList = [{id:'default',name:'기본',order:0}];
-      const nextActive = (prev.workMusicActiveTabId === tabId) ? nextList[0].id : (prev.workMusicActiveTabId || 'default');
-      const nextSongs = (Array.isArray(prev.workMusicSongs) ? prev.workMusicSongs : []).filter(s=>(s.workMusicTabId || 'default') !== tabId);
-      await setDoc(stateDoc,{ workMusicTabList: nextList, workMusicActiveTabId: nextActive, workMusicSongs: nextSongs, workMusicCurrentIndex: 0 },{ merge:true });
-      showFeedbackMessage('노동요 탭을 삭제했습니다.');
-    };
-
-    window.cloudSaveWorkMusic = async ()=>{
-      if(!ensureLogin()) return;
-      const { stateDoc } = await cloudRefs();
-      await setDoc(stateDoc,{
+    function collectState(){
+      return {
+        taskStatus: window.taskStatus || {},
+        notesTabList: window.__notesTabList || [{id:'memo',name:'메모',order:0}],
+        notesTabs: window.__notesTabs || {},
+        notesActiveTabId: window.__notesActiveTabId || 'memo',
+        bookmarkTabList: window.__bookmarkTabList || [{id:'default',name:'기본',order:0}],
+        bookmarkActiveTabId: window.__bookmarkActiveTabId || 'default',
         workMusicSongs: window.workMusicSongs || [],
         workMusicMode: window.workMusicMode || 'sequential',
         workMusicCurrentIndex: Number(window.workMusicCurrentIndex || 0),
@@ -4016,284 +3830,579 @@ function initBookmarks(){
         workMusicLastVolume: Number(window.workMusicLastVolume ?? 80),
         workMusicIsMuted: !!window.workMusicIsMuted,
         workMusicTabList: window.__workMusicTabList || [{id:'default',name:'기본',order:0}],
-        workMusicActiveTabId: window.__workMusicActiveTabId || 'default'
-      },{ merge:true });
-    };
-
-    window.deleteTask=async ()=>{
-      if(!ensureLogin() || !window.currentTask?.id){ if(typeof closeModal==='function') closeModal(); return; }
-      const { tasksCol } = await cloudRefs();
-      await deleteDoc(doc(tasksCol,String(window.currentTask.id)));
-      window.customTasks=(window.customTasks||[]).filter(t=>t.id!==window.currentTask.id);
-      if(typeof renderCalendar==='function') renderCalendar();
-    };
-
-    // ===== 북마크 저장 로직 (sourceDomain 추가) =====
-    
-    // 동영상 북마크 저장 (URL만 저장, type: 'video')
-    window.addVideoBookmark = async (url)=>{
-      if(!ensureLogin()) return;
-      const { imagesCol } = await cloudRefs();
-      // pageUrl 필드에 동영상 URL을 저장. title 필드 추가.
-      await addDoc(imagesCol,{ pageUrl: url, url: null, type:'video', title: null, sourceDomain: extractDomain(url), bookmarkTabId: window.__bookmarkActiveTabId || 'default', timestamp:new Date() }); 
-    };
-    
-    // 일반 링크 북마크 저장 (URL만 저장, type: 'link')
-    window.addGenericBookmark = async (url)=>{
-      if(!ensureLogin()) return;
-      const { imagesCol } = await cloudRefs();
-      // pageUrl 필드에 일반 URL을 저장. title 필드 추가.
-      await addDoc(imagesCol,{ pageUrl: url, url: null, type:'link', title: null, sourceDomain: extractDomain(url), bookmarkTabId: window.__bookmarkActiveTabId || 'default', timestamp:new Date() }); 
-    };
-    
-    // 인스타그램 북마크 저장 (퍼가기 코드 저장, type: 'instagram')
-    window.addInstagramBookmark = async (embedCode)=>{
-      if(!ensureLogin()) return;
-      const { imagesCol } = await cloudRefs();
-      
-      // 퍼가기 코드에서 원본 URL 추출 시도
-      let pageUrl = '인스타그램 게시물';
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(embedCode, 'text/html');
-      const blockquote = doc.querySelector('blockquote.instagram-media');
-      if(blockquote && blockquote.cite) pageUrl = blockquote.cite;
-      
-      await addDoc(imagesCol,{ pageUrl: pageUrl, embedCode: embedCode, url: null, type:'instagram', title: null, sourceDomain: extractDomain(pageUrl), bookmarkTabId: window.__bookmarkActiveTabId || 'default', timestamp:new Date() }); 
-    };
-
-    // 이미지 URL만 저장 (type: 'remote')
-    window.addRemoteImage = async (url, pageUrl)=>{
-      if(!ensureLogin()) return;
-      const { imagesCol } = await cloudRefs();
-      await addDoc(imagesCol,{ url, pageUrl: pageUrl||null, type:'remote', sourceDomain: extractDomain(pageUrl || url), bookmarkTabId: window.__bookmarkActiveTabId || 'default', timestamp:new Date() });
-    };
-    
-    // [수정 4] window.addImage 함수 전체 교체 (ImgBB -> Firebase Storage)
-    // (붙여넣기/클립보드/파일드래그 이미지 전용)
-    window.addImage = async (file, pageUrl)=>{ // 'fileOrUrl'을 'file'로 명시
-      if(!ensureLogin()) return;
-
-      // file이 string으로 들어오는 경우 (현재 UI에서는 사용되지 않음)
-      if (typeof file === 'string') {
-          // 원본 URL 추가 로직으로 연결
-          return window.addRemoteImage(file, pageUrl || file);
-      }
-      
-      // file이 File 객체인 경우 (주요 사용 사례)
-      try{
-        const { imagesCol } = await cloudRefs();
-        const user = auth.currentUser;
-        if (!user) throw new Error("로그인이 필요합니다.");
-
-        // 1. 고유한 파일 경로 생성
-        const storagePath = `users/${user.uid}/uploads/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, storagePath);
-
-        // 2. 파일 업로드 (피드백 메시지 추가)
-        showFeedbackMessage('이미지 업로드 중...');
-        const uploadResult = await uploadBytes(storageRef, file);
-        
-        // 3. 다운로드 URL 가져오기
-        const downloadURL = await getDownloadURL(uploadResult.ref);
-        
-        const source = pageUrl ? extractDomain(pageUrl) : 'Uploaded (Firebase)';
-
-        // 4. Firestore에 정보 저장
-        await addDoc(imagesCol,{ 
-          url: downloadURL,       // Firebase Storage URL
-          pageUrl: pageUrl || null,
-          type: 'firebase_storage', // ImgBB 대신 새 타입 지정
-          storagePath: storagePath, // [중요] 삭제를 위한 파일 경로 저장
-          title: null, 
-          sourceDomain: source, 
-          bookmarkTabId: window.__bookmarkActiveTabId || 'default',
-          timestamp: new Date() 
-        });
-        showFeedbackMessage('이미지가 업로드되었습니다.'); // 성공 피드백
-
-      }catch(err){
-        console.error("Firebase Storage 업로드 실패:", err);
-        document.getElementById('modal-message').textContent='이미지 추가 실패: '+(err.message||'오류');
-        document.getElementById('alert-modal').classList.remove('hidden');
-      }
-    };
-
-    // 북마크 제목 수정 기능 (신규)
-    window.updateBookmarkTitle = async (id, newTitle) => {
-        if (!ensureLogin()) return;
-        const { imagesCol } = await cloudRefs();
-        const docRef = doc(imagesCol, id);
-        
-        try {
-            await updateDoc(docRef, { title: newTitle || null });
-        } catch (e) {
-            console.error("제목 업데이트 오류:", e);
-            showAlert("제목을 저장하는 중 오류가 발생했습니다.");
-        }
-    };
-
-    // 링크 북마크 미리보기 이미지 업로드 (붙여넣기 전용)
-    // - Firebase Storage에 업로드 후, 해당 북마크 문서에 previewImageUrl 저장
-    // - 기존 preview는 유지(이전 파일 삭제하지 않음)
-    window.uploadBookmarkPreviewImage = async (bookmarkId, file) => {
-        if(!ensureLogin()) return;
-        if(!bookmarkId || !file) throw new Error('bookmarkId/file required');
-
-        const { imagesCol } = await cloudRefs();
-        const user = auth.currentUser;
-        if(!user) throw new Error('로그인이 필요합니다.');
-
-        // 파일명/타입 보정
-        const contentType = file.type || 'image/png';
-        const safeName = (file.name && file.name.trim()) ? file.name : `preview_${bookmarkId}.png`;
-        const storagePath = `users/${user.uid}/uploads/bookmark_preview_${bookmarkId}_${Date.now()}_${safeName}`;
-        const storageRef = ref(storage, storagePath);
-
-        const uploadResult = await uploadBytes(storageRef, file, { contentType });
-        const downloadURL = await getDownloadURL(uploadResult.ref);
-
-        const docRef = doc(imagesCol, bookmarkId);
-        await updateDoc(docRef, { previewImageUrl: downloadURL, previewStoragePath: storagePath });
-    };
-
-
-    // [수정 5] window.deleteImage 함수 전체 교체 (Firebase Storage 삭제 로직 추가)
-    window.deleteImage = async (id)=>{
-      if(!ensureLogin()) return;
-      try{
-        const { imagesCol } = await cloudRefs();
-        const row=(window.imageBookmarks||[]).find(d=>d.id===id); 
-        
-        if(!row) throw new Error('북마크 항목을 찾을 수 없습니다.');
-        
-        // 1. Firebase Storage에 업로드된 파일인 경우
-        if (row.type === 'firebase_storage') {
-          // 1-1. Storage에서 파일 삭제
-          if (row.storagePath) {
-            try {
-              const fileRef = ref(storage, row.storagePath);
-              await deleteObject(fileRef);
-            } catch (e) {
-              console.warn("Storage 파일 삭제 실패 (무시함):", e);
-              // 스토리지에 파일이 없더라도 DB 문서는 삭제되도록 계속 진행
-            }
-          }
-          // 1-2. Firestore 문서 삭제
-          await deleteDoc(doc(imagesCol, id));
-          showFeedbackMessage('북마크가 삭제되었습니다.');
-
-        // 2. ImgBB에 업로드된 파일인 경우 (기존 코드 유지)
-        } else if(row.type==='imgbb'){
-          const delUrl=row.imgbb_delete_url||null;
-          if(delUrl){ 
-            try{ 
-                await fetch(delUrl,{method:'GET'}); 
-            }catch(_){/* imgbb 삭제 오류는 무시 */} 
-          }
-          await deleteDoc(doc(imagesCol,id));
-          showFeedbackMessage('북마크가 삭제되었습니다.');
-        
-        // 3. 단순 링크/URL 북마크인 경우 (DB 문서만 삭제)
-        } else if(row.type==='remote' || row.type === 'video' || row.type === 'link' || row.type === 'instagram'){
-          await deleteDoc(doc(imagesCol,id));
-          showFeedbackMessage('북마크가 삭제되었습니다.');
-        
-        // 4. 기타 (DB 문서만 삭제)
-        } else {
-            await deleteDoc(doc(imagesCol, id));
-            showFeedbackMessage('북마크가 삭제되었습니다.');
-        }
-
-      }catch(e){
-        document.getElementById('modal-message').textContent='북마크 삭제 중 오류: '+(e?.message||'unknown');
-        document.getElementById('alert-modal').classList.remove('hidden');
-      }
-    };
-
-    // ===== 실시간 동기화 =====
-    window.__unsubs=[];
-    async function setupRealtimeSync(){
-      const { tasksCol, stateDoc, imagesCol } = await cloudRefs();
-
-      // ===== 안전 초기화 =====
-      // 중요: 기존 메모/메모 탭은 절대 초기화하지 않음.
-      // 노동요 탭만 없을 때 기본탭을 보강한다.
-      try{
-        const st=await getDoc(stateDoc);
-        const prev=st.exists()?(st.data()||{}):{};
-        const patch={};
-        if(!Array.isArray(prev.workMusicTabList) || prev.workMusicTabList.length===0){
-          patch.workMusicTabList=[{id:'default',name:'기본',order:0}];
-        }
-        if(!prev.workMusicActiveTabId){
-          patch.workMusicActiveTabId='default';
-        }
-        if(Object.keys(patch).length){
-          await setDoc(stateDoc, patch, { merge:true });
-        }
-      }catch(e){ console.warn('workMusic default tab init skipped', e); }
-
-      window.__unsubs.forEach(fn=>{ try{ fn(); }catch(_){} }); window.__unsubs=[];
-
-      const unsubTasks = onSnapshot(tasksCol,(snap)=>{ window.customTasks=snap.docs.map(d=>({id:d.id,...d.data()})); if(typeof renderCalendar==='function') renderCalendar(); });
-      window.__unsubs.push(unsubTasks);
-
-      const unsubState = onSnapshot(stateDoc,(ds)=>{
-        const data=ds.exists()?(ds.data()||{}):{};
-        window.taskStatus=data.taskStatus||{};
-        // 기존 메모 데이터 보호: Firestore에 값이 없다고 해서 로컬 메모 탭을 덮어쓰지 않음
-        window.__notesTabList = Array.isArray(data.notesTabList) && data.notesTabList.length
-          ? data.notesTabList
-          : (Array.isArray(window.__notesTabList) && window.__notesTabList.length ? window.__notesTabList : [{ id:'memo', name:'메모', order:0 }]);
-        window.__notesTabs = data.notesTabs && Object.keys(data.notesTabs).length
-          ? data.notesTabs
-          : (window.__notesTabs || {});
-        window.__notesActiveTabId = data.notesActiveTabId || window.__notesActiveTabId || (window.__notesTabList[0]?.id) || 'memo';
-        window.__bookmarkTabList = Array.isArray(data.bookmarkTabList) && data.bookmarkTabList.length ? data.bookmarkTabList : [{id:'default',name:'기본',order:0}];
-        window.__bookmarkActiveTabId = data.bookmarkActiveTabId || window.__bookmarkActiveTabId || 'default';
-        window.workMusicSongs = Array.isArray(data.workMusicSongs) ? data.workMusicSongs : [];
-        window.__workMusicTabList = Array.isArray(data.workMusicTabList) && data.workMusicTabList.length ? data.workMusicTabList : [{id:'default', name:'기본', order:0}];
-        window.__workMusicActiveTabId = data.workMusicActiveTabId || window.__workMusicActiveTabId || 'default';
-        window.workMusicMode = data.workMusicMode || 'sequential';
-        window.workMusicCurrentIndex = Number(data.workMusicCurrentIndex || 0);
-        window.workMusicVolume = Number(data.workMusicVolume ?? window.workMusicVolume ?? 80);
-        window.workMusicLastVolume = Number(data.workMusicLastVolume ?? window.workMusicLastVolume ?? (window.workMusicVolume || 80));
-        window.workMusicIsMuted = !!data.workMusicIsMuted || Number(window.workMusicVolume || 0) === 0;
-        if(typeof renderWorkMusicAll==='function') renderWorkMusicAll();
-        if(typeof window.renderNotesUI==='function') window.renderNotesUI();
-        if(typeof window.renderBookmarkTabsUI==='function') window.renderBookmarkTabsUI();
-        if(typeof renderCalendar==='function') renderCalendar();
-      });
-      window.__unsubs.push(unsubState);
-
-      const unsubImages = onSnapshot(imagesCol,(snap)=>{ 
-          // imageBookmarks에 이미지/동영상/링크/인스타그램 북마크 모두 포함
-          window.imageBookmarks=snap.docs.map(d=>({id:d.id,...d.data()})); 
-          if(typeof renderImageBookmarks==='function') renderImageBookmarks();
-          if(typeof window.renderBookmarkTabsUI==='function') window.renderBookmarkTabsUI(); 
-      });
-      window.__unsubs.push(unsubImages);
+        workMusicActiveTabId: window.__workMusicActiveTabId || 'default',
+        clipPages: (currentAppData.state && currentAppData.state.clipPages) || []
+      };
     }
 
-    onAuthStateChanged(auth, async (user)=>{
-      loadingOverlay.classList.remove('hidden'); window.isAuthReady=false;
-      if(user){
-        userInfoEl.textContent = `${user.displayName || '로그인됨'} (${user.email || ''})`;
+    function serializableBookmarks(){
+      return (window.imageBookmarks||[]).map(b=>{
+        const copy={...b};
+        if(copy.driveFileId){
+          copy.url=null;
+        }
+        if(copy.previewDriveFileId){ copy.previewImageUrl=null; }
+        if(copy.timestamp?.toMillis){ copy.timestampMs=copy.timestamp.toMillis(); delete copy.timestamp; }
+        return copy;
+      });
+    }
+
+    function buildAppData(){
+      return {
+        version:1,
+        updatedAt:new Date().toISOString(),
+        customTasks: window.customTasks || [],
+        imageBookmarks: serializableBookmarks(),
+        state: collectState()
+      };
+    }
+
+    function applyAppData(data){
+      currentAppData = data && typeof data==='object' ? data : getDefaultAppData();
+      const st=currentAppData.state || {};
+      window.customTasks = Array.isArray(currentAppData.customTasks) ? currentAppData.customTasks : [];
+      window.taskStatus = st.taskStatus || {};
+      window.__notesTabList = Array.isArray(st.notesTabList)&&st.notesTabList.length ? st.notesTabList : [{id:'memo',name:'메모',order:0}];
+      window.__notesTabs = st.notesTabs || {};
+      window.__notesActiveTabId = st.notesActiveTabId || 'memo';
+      window.__bookmarkTabList = Array.isArray(st.bookmarkTabList)&&st.bookmarkTabList.length ? st.bookmarkTabList : [{id:'default',name:'기본',order:0}];
+      window.__bookmarkActiveTabId = st.bookmarkActiveTabId || 'default';
+      window.workMusicSongs = Array.isArray(st.workMusicSongs) ? st.workMusicSongs : [];
+      window.__workMusicTabList = Array.isArray(st.workMusicTabList)&&st.workMusicTabList.length ? st.workMusicTabList : [{id:'default',name:'기본',order:0}];
+      window.__workMusicActiveTabId = st.workMusicActiveTabId || 'default';
+      window.workMusicMode = st.workMusicMode || 'sequential';
+      window.workMusicCurrentIndex = Number(st.workMusicCurrentIndex || 0);
+      window.workMusicVolume = Number(st.workMusicVolume ?? 80);
+      window.workMusicLastVolume = Number(st.workMusicLastVolume ?? 80);
+      window.workMusicIsMuted = !!st.workMusicIsMuted;
+      window.imageBookmarks = (Array.isArray(currentAppData.imageBookmarks)?currentAppData.imageBookmarks:[]).map(b=>({
+        ...b,
+        timestamp: driveTimestamp(b.timestampMs || Date.parse(b.timestamp || '') || 0)
+      }));
+    }
+
+    function renderEverything(){
+      if(typeof renderCalendar==='function') renderCalendar();
+      if(typeof renderImageBookmarks==='function') renderImageBookmarks();
+      if(typeof renderWorkMusicAll==='function') renderWorkMusicAll();
+      if(typeof window.renderNotesUI==='function') window.renderNotesUI();
+      if(typeof window.renderBookmarkTabsUI==='function') window.renderBookmarkTabsUI();
+    }
+
+    async function waitForGoogle(){
+      for(let i=0;i<80;i++){
+        if(window.google?.accounts?.oauth2) return true;
+        await new Promise(r=>setTimeout(r,100));
+      }
+      return false;
+    }
+
+    async function setupTokenClient(){
+      const clientId=getGoogleClientId();
+      if(!clientId) return false;
+      const ok=await waitForGoogle();
+      if(!ok){ showAlert('Google 로그인 스크립트를 불러오지 못했습니다.'); return false; }
+      googleTokenClient=google.accounts.oauth2.initTokenClient({
+        client_id:clientId,
+        scope:DRIVE_SCOPE,
+        callback:async(resp)=>{
+          if(resp?.access_token){
+            driveAccessToken=resp.access_token;
+            await afterGoogleLogin();
+          }else{
+            showAlert('구글 로그인에 실패했습니다.');
+          }
+        }
+      });
+      return true;
+    }
+
+    async function doSignIn(){
+      if(!googleTokenClient){
+        const ok=await setupTokenClient();
+        if(!ok) return;
+      }
+      googleTokenClient.requestAccessToken({prompt: driveAccessToken ? '' : 'consent'});
+    }
+
+    async function driveFetch(url, options={}){
+      if(!driveAccessToken) throw new Error('구글 로그인이 필요합니다.');
+      const headers=new Headers(options.headers||{});
+      headers.set('Authorization','Bearer '+driveAccessToken);
+      const res=await fetch(url,{...options,headers});
+      if(res.status===401){ driveAccessToken=null; throw new Error('Google 인증이 만료되었습니다. 다시 로그인하세요.'); }
+      if(!res.ok){ throw new Error(await res.text() || ('Drive API 오류 '+res.status)); }
+      return res;
+    }
+
+    async function getUserProfile(){
+      try{
+        return await driveFetch('https://www.googleapis.com/oauth2/v3/userinfo').then(r=>r.json());
+      }catch(e){ return {}; }
+    }
+
+    function qEscape(v){ return String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+    function makeSafeDriveName(name,fallback='untitled'){
+      const cleaned=String(name||fallback)
+        .replace(/[\\/:*?"<>|#%{}~&]/g,'_')
+        .replace(/\s+/g,' ')
+        .trim()
+        .slice(0,90);
+      return cleaned || fallback;
+    }
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function pad3(n){ return String(n).padStart(3,'0'); }
+    function formatDriveFileTime(ms=Date.now()){
+      const d=new Date(ms);
+      // 보기 좋게 날짜_시간까지만 사용
+      return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+    }
+    function fileExtFromBlob(file){
+      const name=(file && file.name) ? String(file.name) : '';
+      const found=name.match(/\.([a-zA-Z0-9]{1,8})$/);
+      if(found) return '.'+found[1].toLowerCase();
+      const type=(file && file.type) ? String(file.type) : '';
+      if(type.includes('jpeg')||type.includes('jpg')) return '.jpg';
+      if(type.includes('webp')) return '.webp';
+      if(type.includes('gif')) return '.gif';
+      return '.png';
+    }
+    function getNoteTxtFileName(tab,idx=0){
+      const order=Number.isFinite(Number(tab?.order)) ? Number(tab.order) : idx*10;
+      return `${pad3(order)}_${makeSafeDriveName(tab?.name||tab?.id||'메모')}.txt`;
+    }
+    function getBookmarkTabFolderName(tab,idx=0){
+      // Drive에서 보기 쉽게 탭 순서대로 001_기본, 002_자료 형식
+      return `${pad3(idx+1)}_${makeSafeDriveName(tab?.name||tab?.id||'북마크')}`;
+    }
+    async function findDriveFile(name,parentId=null,mimeType=null){
+      const q=[`name='${qEscape(name)}'`,'trashed=false'];
+      if(parentId) q.push(`'${parentId}' in parents`);
+      if(mimeType) q.push(`mimeType='${mimeType}'`);
+      const url='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q.join(' and '))+'&fields=files(id,name,mimeType,modifiedTime)&spaces=drive';
+      const data=await driveFetch(url).then(r=>r.json());
+      return data.files?.[0] || null;
+    }
+
+    async function listDriveFilesInFolder(parentId){
+      if(!parentId) return [];
+      const q=[`'${parentId}' in parents`,'trashed=false'];
+      const url='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q.join(' and '))+'&fields=files(id,name,mimeType,modifiedTime)&spaces=drive&pageSize=1000';
+      const data=await driveFetch(url).then(r=>r.json());
+      return data.files || [];
+    }
+
+    async function createDriveFolder(name,parentId=null){
+      const meta={name,mimeType:'application/vnd.google-apps.folder'};
+      if(parentId) meta.parents=[parentId];
+      return await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id,name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(meta)}).then(r=>r.json());
+    }
+    async function getOrCreateDriveFolder(name,parentId=null){
+      return await findDriveFile(name,parentId,'application/vnd.google-apps.folder') || await createDriveFolder(name,parentId);
+    }
+
+    async function ensureDriveFolders(){
+      if(driveFolders) return driveFolders;
+      const app=await getOrCreateDriveFolder(DRIVE_APP_FOLDER);
+      const calendar=await getOrCreateDriveFolder(DRIVE_CALENDAR_FOLDER,app.id);
+      const notes=await getOrCreateDriveFolder(DRIVE_NOTES_FOLDER,app.id);
+      const bookmarks=await getOrCreateDriveFolder(DRIVE_BOOKMARKS_FOLDER,app.id);
+      // 북마크 이미지는 중간 '이미지' 폴더 없이 북마크 폴더 바로 아래 탭별 폴더에 저장
+      const bookmarkImages=bookmarks;
+      const workmusic=await getOrCreateDriveFolder(DRIVE_WORKMUSIC_FOLDER,app.id);
+      const clipviewer=await getOrCreateDriveFolder(DRIVE_CLIP_FOLDER,app.id);
+      const clipCurrent=await getOrCreateDriveFolder(DRIVE_CLIP_CURRENT_FOLDER,clipviewer.id);
+      driveFolders={app,calendar,notes,bookmarks,bookmarkImages,workmusic,clipviewer,clipCurrent};
+      return driveFolders;
+    }
+
+    async function getBookmarkTabDriveFolder(tabId){
+      const folders=await ensureDriveFolders();
+      const tabs=[...(window.__bookmarkTabList||[{id:'default',name:'기본',order:0}])]
+        .sort((a,b)=>(Number(a.order||0)-Number(b.order||0)));
+      let idx=tabs.findIndex(t=>(t.id||'default')===(tabId||'default'));
+      if(idx<0) idx=0;
+      const tab=tabs[idx] || {id:'default',name:'기본',order:0};
+      const folderName=getBookmarkTabFolderName(tab,idx);
+      return await getOrCreateDriveFolder(folderName,folders.bookmarks.id);
+    }
+
+    async function uploadDriveMultipart({name,blob,parentId,fileId=null,mimeType='application/octet-stream'}){
+      const meta={name,mimeType};
+      if(parentId && !fileId) meta.parents=[parentId];
+      const boundary='drive_'+Math.random().toString(36).slice(2);
+      const delimiter='\r\n--'+boundary+'\r\n';
+      const close='\r\n--'+boundary+'--';
+      const body=new Blob([delimiter,'Content-Type: application/json; charset=UTF-8\r\n\r\n',JSON.stringify(meta),delimiter,'Content-Type: '+mimeType+'\r\n\r\n',blob,close],{type:'multipart/related; boundary='+boundary});
+      const url=fileId ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id,name,mimeType,modifiedTime` : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime';
+      return await driveFetch(url,{method:fileId?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body}).then(r=>r.json());
+    }
+
+    async function deleteDriveFile(fileId){
+      if(!fileId) return;
+      try{ await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`,{method:'DELETE'}); }catch(e){ console.warn('Drive delete skipped',e); }
+    }
+
+    async function downloadDriveBlob(fileId){
+      return await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`).then(r=>r.blob());
+    }
+    async function downloadDriveText(fileId){
+      return await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`).then(r=>r.text());
+    }
+
+    function splitAppDataForDrive(data){
+      data=data||getDefaultAppData();
+      const st=data.state||{};
+      return {
+        calendar:{customTasks:data.customTasks||[],taskStatus:st.taskStatus||{},updatedAt:data.updatedAt||new Date().toISOString()},
+        notes:{notesTabList:st.notesTabList||[{id:'memo',name:'메모',order:0}],notesTabs:st.notesTabs||{},notesActiveTabId:st.notesActiveTabId||'memo',updatedAt:data.updatedAt||new Date().toISOString()},
+        bookmarks:{imageBookmarks:data.imageBookmarks||[],bookmarkTabList:st.bookmarkTabList||[{id:'default',name:'기본',order:0}],bookmarkActiveTabId:st.bookmarkActiveTabId||'default',updatedAt:data.updatedAt||new Date().toISOString()},
+        workmusic:{workMusicSongs:st.workMusicSongs||[],workMusicMode:st.workMusicMode||'sequential',workMusicCurrentIndex:Number(st.workMusicCurrentIndex||0),workMusicVolume:Number(st.workMusicVolume??80),workMusicLastVolume:Number(st.workMusicLastVolume??80),workMusicIsMuted:!!st.workMusicIsMuted,workMusicTabList:st.workMusicTabList||[{id:'default',name:'기본',order:0}],workMusicActiveTabId:st.workMusicActiveTabId||'default',updatedAt:data.updatedAt||new Date().toISOString()},
+        clipviewer:{clipPages:st.clipPages||[],updatedAt:data.updatedAt||new Date().toISOString()}
+      };
+    }
+
+    function mergeDriveParts(parts){
+      const base=getDefaultAppData();
+      if(parts.calendar){ base.customTasks=parts.calendar.customTasks||[]; base.state.taskStatus=parts.calendar.taskStatus||{}; }
+      if(parts.notes){ base.state.notesTabList=parts.notes.notesTabList||base.state.notesTabList; base.state.notesTabs=parts.notes.notesTabs||{}; base.state.notesActiveTabId=parts.notes.notesActiveTabId||'memo'; }
+      if(parts.bookmarks){ base.imageBookmarks=parts.bookmarks.imageBookmarks||[]; base.state.bookmarkTabList=parts.bookmarks.bookmarkTabList||base.state.bookmarkTabList; base.state.bookmarkActiveTabId=parts.bookmarks.bookmarkActiveTabId||'default'; }
+      if(parts.workmusic){ base.state.workMusicSongs=parts.workmusic.workMusicSongs||[]; base.state.workMusicMode=parts.workmusic.workMusicMode||'sequential'; base.state.workMusicCurrentIndex=Number(parts.workmusic.workMusicCurrentIndex||0); base.state.workMusicVolume=Number(parts.workmusic.workMusicVolume??80); base.state.workMusicLastVolume=Number(parts.workmusic.workMusicLastVolume??80); base.state.workMusicIsMuted=!!parts.workmusic.workMusicIsMuted; base.state.workMusicTabList=parts.workmusic.workMusicTabList||base.state.workMusicTabList; base.state.workMusicActiveTabId=parts.workmusic.workMusicActiveTabId||'default'; }
+      if(parts.clipviewer){ base.state.clipPages=parts.clipviewer.clipPages||[]; }
+      base.updatedAt=new Date().toISOString();
+      return base;
+    }
+
+    async function saveJsonToDrive(folderId,fileName,obj){
+      const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+      const existing=await findDriveFile(fileName,folderId,'application/json');
+      return await uploadDriveMultipart({name:fileName,blob,parentId:folderId,fileId:existing?.id||null,mimeType:'application/json'});
+    }
+
+    async function loadJsonFromDrive(folderId,fileName){
+      const file=await findDriveFile(fileName,folderId,'application/json');
+      if(!file) return null;
+      try{ return JSON.parse(await downloadDriveText(file.id)); }catch(e){ console.warn('JSON load failed',fileName,e); return null; }
+    }
+
+    async function saveNotesToDrive(folderId,notesPart){
+      notesPart=notesPart||{};
+      const tabs=[...(notesPart.notesTabList||[{id:'memo',name:'메모',order:0}])]
+        .sort((a,b)=>(Number(a.order||0)-Number(b.order||0)));
+      const notes=notesPart.notesTabs||{};
+      const expectedNames=new Set();
+      const indexTabs=[];
+      for(let i=0;i<tabs.length;i++){
+        const tab=tabs[i];
+        const fileName=getNoteTxtFileName(tab,i);
+        expectedNames.add(fileName);
+        const textBlob=new Blob([notes[tab.id]||''],{type:'text/plain;charset=utf-8'});
+        const existing=await findDriveFile(fileName,folderId,'text/plain');
+        const uploaded=await uploadDriveMultipart({name:fileName,blob:textBlob,parentId:folderId,fileId:existing?.id||null,mimeType:'text/plain'});
+        indexTabs.push({...tab,noteFileName:fileName,noteFileId:uploaded.id});
+      }
+      const files=await listDriveFilesInFolder(folderId);
+      for(const f of files){
+        if(String(f.name||'').toLowerCase().endsWith('.txt') && !expectedNames.has(f.name)){
+          await deleteDriveFile(f.id);
+        }
+      }
+      const index={
+        version:1,
+        updatedAt:notesPart.updatedAt||new Date().toISOString(),
+        notesActiveTabId:notesPart.notesActiveTabId||tabs[0]?.id||'memo',
+        notesTabList:indexTabs
+      };
+      await saveJsonToDrive(folderId,DRIVE_NOTES_FILE,index);
+      return index;
+    }
+
+    async function loadNotesFromDrive(folderId){
+      const index=await loadJsonFromDrive(folderId,DRIVE_NOTES_FILE);
+      if(index && Array.isArray(index.notesTabList)){
+        const notesTabs={};
+        const notesTabList=index.notesTabList.map(({noteFileName,noteFileId,...tab})=>tab);
+        for(const tab of index.notesTabList){
+          try{
+            let file=null;
+            if(tab.noteFileId) file={id:tab.noteFileId,name:tab.noteFileName};
+            if(!file && tab.noteFileName) file=await findDriveFile(tab.noteFileName,folderId,'text/plain');
+            notesTabs[tab.id]=file ? await downloadDriveText(file.id) : '';
+          }catch(e){
+            console.warn('note txt load failed',tab.name,e);
+            notesTabs[tab.id]='';
+          }
+        }
+        return {
+          notesTabList:notesTabList.length?notesTabList:[{id:'memo',name:'메모',order:0}],
+          notesTabs,
+          notesActiveTabId:index.notesActiveTabId||notesTabList[0]?.id||'memo',
+          updatedAt:index.updatedAt||new Date().toISOString()
+        };
+      }
+
+      const old=await loadJsonFromDrive(folderId,DRIVE_OLD_NOTES_FILE);
+      if(old) return old;
+
+      return null;
+    }
+
+    async function saveAppDataNow(){
+      if(!driveReady || !driveAccessToken) return;
+      setDriveBusy('Google Drive 저장 중...');
+      try{
+        const folders=await ensureDriveFolders();
+        const data=buildAppData();
+        currentAppData=data;
+        const parts=splitAppDataForDrive(data);
+        await saveJsonToDrive(folders.calendar.id,DRIVE_CALENDAR_FILE,parts.calendar);
+        await saveNotesToDrive(folders.notes.id,parts.notes);
+        await saveJsonToDrive(folders.bookmarks.id,DRIVE_BOOKMARKS_FILE,parts.bookmarks);
+        await saveJsonToDrive(folders.workmusic.id,DRIVE_WORKMUSIC_FILE,parts.workmusic);
+        await saveJsonToDrive(folders.clipviewer.id,DRIVE_CLIP_FILE,parts.clipviewer);
+        setDriveStatus('Google Drive 저장 완료');
+      }catch(e){
+        console.error(e);
+        setDriveStatus('Drive 저장 실패', true);
+        throw e;
+      }
+    }
+    function scheduleSaveAppData(){
+      clearTimeout(driveSaveTimer);
+      setDriveStatus('저장 예약됨');
+      driveSaveTimer=setTimeout(()=>saveAppDataNow().catch(e=>console.error(e)),900);
+    }
+
+    async function loadAppDataFromDrive(){
+      const folders=await ensureDriveFolders();
+      const parts={
+        calendar:await loadJsonFromDrive(folders.calendar.id,DRIVE_CALENDAR_FILE),
+        notes:await loadNotesFromDrive(folders.notes.id),
+        bookmarks:await loadJsonFromDrive(folders.bookmarks.id,DRIVE_BOOKMARKS_FILE),
+        workmusic:await loadJsonFromDrive(folders.workmusic.id,DRIVE_WORKMUSIC_FILE),
+        clipviewer:await loadJsonFromDrive(folders.clipviewer.id,DRIVE_CLIP_FILE)
+      };
+      const hasAny=Object.values(parts).some(Boolean);
+      if(!hasAny){
+        currentAppData=getDefaultAppData();
+        applyAppData(currentAppData);
+        await saveAppDataNow();
+        return;
+      }
+      applyAppData(mergeDriveParts(parts));
+      await resolveDriveBookmarkImages();
+      await loadClipPagesFromDrive(false);
+    }
+
+    async function resolveDriveBookmarkImages(){
+      for(const b of (window.imageBookmarks||[])){
+        if(b.driveFileId && !b.url){
+          try{
+            const blob=await downloadDriveBlob(b.driveFileId);
+            const url=URL.createObjectURL(blob);
+            driveImageUrlCache.set(b.driveFileId,url);
+            b.url=url;
+          }catch(e){ console.warn('bookmark image load failed',b.name,e); }
+        }
+        if(b.previewDriveFileId && !b.previewImageUrl){
+          try{
+            const blob=await downloadDriveBlob(b.previewDriveFileId);
+            const url=URL.createObjectURL(blob);
+            driveImageUrlCache.set(b.previewDriveFileId,url);
+            b.previewImageUrl=url;
+          }catch(e){ console.warn('preview image load failed',b.name,e); }
+        }
+      }
+    }
+
+    async function afterGoogleLogin(){
+      loadingOverlay.classList.remove('hidden');
+      try{
+        driveUser=await getUserProfile();
+        userInfoEl.textContent=`${driveUser.name || '로그인됨'} (${driveUser.email || ''})`;
         signInBtn.classList.add('hidden');
         signOutBtn.classList.remove('hidden');
-        await setupRealtimeSync();
-      }else{
-        userInfoEl.textContent=''; signOutBtn.classList.add('hidden'); signInBtn.classList.remove('hidden');
-        window.__unsubs.forEach(fn=>{ try{ fn(); }catch(_){} }); window.__unsubs=[];
-        window.customTasks=[]; window.taskStatus={}; window.imageBookmarks=[]; window.__notesTabs={}; window.__notesTabList=[{id:'memo',name:'메모',order:0}]; window.__notesActiveTabId='memo'; window.__bookmarkTabList=[{id:'default',name:'기본',order:0}]; window.__bookmarkActiveTabId='default'; window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; window.__workMusicActiveTabId='default'; window.workMusicSongs=[]; window.workMusicMode='sequential'; window.workMusicCurrentIndex=0; window.workMusicVolume=80; window.workMusicLastVolume=80; window.workMusicIsMuted=false;
-        if(typeof renderCalendar==='function') renderCalendar(); if(typeof renderImageBookmarks==='function') renderImageBookmarks(); if(typeof renderWorkMusicAll==='function') renderWorkMusicAll(); const na=document.getElementById('notesArea'); if(na) na.value='';
-      }
-      loadingOverlay.classList.add('hidden'); window.isAuthReady=true;
-    });
+        driveReady=true; window.isAuthReady=true;
+        await loadAppDataFromDrive();
+        renderEverything();
+        await loadClipPagesFromDrive(true);
+        showFeedbackMessage('Google Drive 데이터를 불러왔습니다.');
+      }catch(e){
+        console.error(e); showAlert('Google Drive 데이터 로드 실패: '+(e.message||e));
+      }finally{ loadingOverlay.classList.add('hidden'); }
+    }
 
-initCalendar();
-initNotes();
-initBookmarks();
+    signInBtn.onclick=()=>doSignIn();
+    signOutBtn.onclick=()=>{
+      driveAccessToken=null; driveReady=false; driveUser=null; driveFolders=null; appDataFileId=null;
+      userInfoEl.textContent=''; signOutBtn.classList.add('hidden'); signInBtn.classList.remove('hidden');
+      window.isAuthReady=true;
+      window.customTasks=[]; window.taskStatus={}; window.imageBookmarks=[]; window.__notesTabs={}; window.__notesTabList=[{id:'memo',name:'메모',order:0}]; window.__notesActiveTabId='memo'; window.__bookmarkTabList=[{id:'default',name:'기본',order:0}]; window.__bookmarkActiveTabId='default'; window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; window.__workMusicActiveTabId='default'; window.workMusicSongs=[];
+      renderEverything();
+      if(typeof clearClipLocal==='function') clearClipLocal();
+      if(typeof showClipMessage==='function') showClipMessage('로그인하면 Drive에 저장된 CLIP 원고가 표시됩니다.');
+      if(typeof setClipStatus==='function') setClipStatus('로그아웃됨');
+    };
+
+    window.ensureLogin=()=>{
+      if(!window.isAuthReady){ showAlert('데이터 로딩 중입니다.'); return false; }
+      if(!driveAccessToken){ showAlert('구글 로그인 후 이용해 주세요.'); return false; }
+      return true;
+    };
+
+    // ===== 기존 UI가 호출하는 저장 함수들을 Drive 저장으로 연결 =====
+    let notesTimer=null, notesPending=null;
+    window.cloudSaveNotesDebounced=function(tabId,value){
+      clearTimeout(notesTimer);
+      if(tabId) notesPending={tabId,value:value??''};
+      notesTimer=setTimeout(()=>{
+        if(notesPending){ window.cloudSaveNotesFor(notesPending.tabId,notesPending.value); notesPending=null; }
+        else window.cloudSaveNotes();
+      },800);
+    };
+    window.cloudSaveAll=async()=>{ if(!ensureLogin()) return; await saveAppDataNow(); };
+    window.cloudSaveStateOnly=async()=>{ if(!ensureLogin()) return; scheduleSaveAppData(); };
+    window.cloudSaveNotes=async(tabIdArg,valueArg)=>{
+      if(!ensureLogin()) return;
+      const id=tabIdArg || window.__notesActiveTabId || 'memo';
+      let val=valueArg;
+      if(val===undefined){ const el=document.getElementById('notesArea'); val=el?el.value:''; }
+      window.__notesTabs=window.__notesTabs||{}; window.__notesTabs[id]=val;
+      window.__notesActiveTabId=id;
+      scheduleSaveAppData();
+    };
+    window.cloudSaveNotesFor=(tabId,value)=>window.cloudSaveNotes(tabId,value);
+    window.cloudSetActiveNotesTab=async(tabId)=>{ window.__notesActiveTabId=tabId; scheduleSaveAppData(); };
+    window.cloudAddNotesTab=async({id,name})=>{ const list=window.__notesTabList||[]; const max=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0); window.__notesTabList=[...list,{id,name,order:max+10}]; window.__notesActiveTabId=id; window.__notesTabs=window.__notesTabs||{}; window.__notesTabs[id]=''; renderEverything(); scheduleSaveAppData(); };
+    window.cloudRenameNotesTab=async(tabId,newName)=>{ window.__notesTabList=(window.__notesTabList||[]).map(t=>t.id===tabId?{...t,name:newName}:t); renderEverything(); scheduleSaveAppData(); };
+    window.cloudReorderNotesTabs=async(list)=>{ window.__notesTabList=list; renderEverything(); scheduleSaveAppData(); };
+    window.cloudDeleteNotesTab=async(tabId)=>{ let list=(window.__notesTabList||[]).filter(t=>t.id!==tabId); window.__notesTabs=window.__notesTabs||{}; delete window.__notesTabs[tabId]; if(!list.length) list=[{id:'memo',name:'메모',order:0}]; window.__notesTabList=list; if(window.__notesActiveTabId===tabId) window.__notesActiveTabId=list[0].id; renderEverything(); scheduleSaveAppData(); };
+
+    window.cloudSetActiveBookmarkTab=async(tabId)=>{ window.__bookmarkActiveTabId=tabId||'default'; renderEverything(); scheduleSaveAppData(); };
+    window.cloudAddBookmarkTab=async({id,name})=>{ const list=window.__bookmarkTabList||[{id:'default',name:'기본',order:0}]; const max=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0); window.__bookmarkTabList=[...list,{id,name,order:max+10}]; window.__bookmarkActiveTabId=id; renderEverything(); scheduleSaveAppData(); };
+    window.cloudRenameBookmarkTab=async(tabId,name)=>{ window.__bookmarkTabList=(window.__bookmarkTabList||[]).map(t=>t.id===tabId?{...t,name}:t); renderEverything(); scheduleSaveAppData(); };
+    window.cloudReorderBookmarkTabs=async(list)=>{ window.__bookmarkTabList=list; renderEverything(); scheduleSaveAppData(); };
+    window.cloudDeleteBookmarkTab=async(tabId)=>{ window.imageBookmarks=(window.imageBookmarks||[]).filter(b=>(b.bookmarkTabId||'default')!==tabId); let list=(window.__bookmarkTabList||[]).filter(t=>t.id!==tabId); if(!list.length) list=[{id:'default',name:'기본',order:0}]; window.__bookmarkTabList=list; if(window.__bookmarkActiveTabId===tabId) window.__bookmarkActiveTabId=list[0].id; renderEverything(); await saveAppDataNow(); };
+    window.moveBookmarkToTab=async(id,tabId)=>{ const b=(window.imageBookmarks||[]).find(x=>x.id===id); if(b){ b.bookmarkTabId=tabId||'default'; renderEverything(); scheduleSaveAppData(); } };
+
+    window.cloudEnsureWorkMusicDefaultTab=async()=>{ if(!window.__workMusicTabList?.length) window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; scheduleSaveAppData(); };
+    window.cloudSetActiveWorkMusicTab=async(tabId)=>{ window.__workMusicActiveTabId=tabId||'default'; window.workMusicCurrentIndex=0; renderEverything(); scheduleSaveAppData(); };
+    window.cloudAddWorkMusicTab=async(tab)=>{ const list=window.__workMusicTabList||[{id:'default',name:'기본',order:0}]; const max=list.reduce((m,t)=>Math.max(m,Number(t.order||0)),0); window.__workMusicTabList=[...list,{...tab,order:tab.order??max+10}]; window.__workMusicActiveTabId=tab.id; renderEverything(); scheduleSaveAppData(); };
+    window.cloudRenameWorkMusicTab=async(tabId,name)=>{ window.__workMusicTabList=(window.__workMusicTabList||[]).map(t=>t.id===tabId?{...t,name}:t); renderEverything(); scheduleSaveAppData(); };
+    window.cloudReorderWorkMusicTabs=async(list)=>{ window.__workMusicTabList=list; renderEverything(); scheduleSaveAppData(); };
+    window.cloudDeleteWorkMusicTab=async(tabId)=>{ let list=(window.__workMusicTabList||[]).filter(t=>t.id!==tabId); if(!list.length) list=[{id:'default',name:'기본',order:0}]; window.__workMusicTabList=list; window.workMusicSongs=(window.workMusicSongs||[]).filter(s=>(s.workMusicTabId||'default')!==tabId); if(window.__workMusicActiveTabId===tabId) window.__workMusicActiveTabId=list[0].id; renderEverything(); scheduleSaveAppData(); };
+    window.cloudSaveWorkMusic=async()=>{ if(!ensureLogin()) return; scheduleSaveAppData(); };
+
+    window.deleteTask=async()=>{ if(!ensureLogin()||!window.currentTask?.id){ if(typeof closeModal==='function') closeModal(); return; } window.customTasks=(window.customTasks||[]).filter(t=>t.id!==window.currentTask.id); renderEverything(); scheduleSaveAppData(); };
+
+    async function uploadFileToDrive(file,folderId,namePrefix='file'){
+      const ms=nowMs();
+      let parentId=folderId;
+      if(!parentId){
+        const tabId=window.__bookmarkActiveTabId||'default';
+        const tabFolder=await getBookmarkTabDriveFolder(tabId);
+        parentId=tabFolder.id;
+      }
+      const ext=fileExtFromBlob(file);
+      const name=`${formatDriveFileTime(ms)}${ext}`;
+      const uploaded=await uploadDriveMultipart({name,blob:file,parentId,mimeType:file.type||'image/png'});
+      uploaded.createdName=name;
+      uploaded.createdMs=ms;
+      return uploaded;
+    }
+
+    window.addVideoBookmark=async(url)=>{ if(!ensureLogin()) return; window.imageBookmarks.push({id:genId('bm'),pageUrl:url,url:null,type:'video',title:null,sourceDomain:extractDomain(url),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
+    window.addGenericBookmark=async(url)=>{ if(!ensureLogin()) return; window.imageBookmarks.push({id:genId('bm'),pageUrl:url,url:null,type:'link',title:null,sourceDomain:extractDomain(url),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
+    window.addInstagramBookmark=async(embedCode)=>{ if(!ensureLogin()) return; let pageUrl='인스타그램 게시물'; try{ const doc=new DOMParser().parseFromString(embedCode,'text/html'); const b=doc.querySelector('blockquote.instagram-media'); if(b?.cite) pageUrl=b.cite; }catch(_){} window.imageBookmarks.push({id:genId('bm'),pageUrl,embedCode,url:null,type:'instagram',title:null,sourceDomain:extractDomain(pageUrl),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
+    window.addRemoteImage=async(url,pageUrl)=>{ if(!ensureLogin()) return; window.imageBookmarks.push({id:genId('bm'),url,pageUrl:pageUrl||null,type:'remote',sourceDomain:extractDomain(pageUrl||url),bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(nowMs()),timestampMs:nowMs()}); renderEverything(); scheduleSaveAppData(); };
+    window.addImage=async(file,pageUrl)=>{ if(!ensureLogin()) return; if(typeof file==='string') return window.addRemoteImage(file,pageUrl||file); try{ showFeedbackMessage('Drive에 이미지 업로드 중...'); const uploaded=await uploadFileToDrive(file,null,'bookmark'); const url=URL.createObjectURL(file); const ms=uploaded.createdMs||nowMs(); window.imageBookmarks.push({id:genId('bm'),url,pageUrl:pageUrl||null,type:'drive_image',driveFileId:uploaded.id,title:null,sourceDomain:pageUrl?extractDomain(pageUrl):'Google Drive',bookmarkTabId:window.__bookmarkActiveTabId||'default',timestamp:driveTimestamp(ms),timestampMs:ms}); renderEverything(); await saveAppDataNow(); showFeedbackMessage('이미지가 Drive에 저장되었습니다.'); }catch(e){ showAlert('이미지 추가 실패: '+(e.message||e)); } };
+    window.updateBookmarkTitle=async(id,newTitle)=>{ const b=(window.imageBookmarks||[]).find(x=>x.id===id); if(b){ b.title=newTitle||null; renderEverything(); scheduleSaveAppData(); } };
+    window.uploadBookmarkPreviewImage=async(bookmarkId,file)=>{ if(!ensureLogin()) return; const b=(window.imageBookmarks||[]).find(x=>x.id===bookmarkId); if(!b) return; const uploaded=await uploadFileToDrive(file,null,'bookmark_preview'); b.previewDriveFileId=uploaded.id; b.previewImageUrl=URL.createObjectURL(file); renderEverything(); await saveAppDataNow(); };
+    window.deleteImage=async(id)=>{ if(!ensureLogin()) return; const row=(window.imageBookmarks||[]).find(b=>b.id===id); if(row){ await deleteDriveFile(row.driveFileId); await deleteDriveFile(row.previewDriveFileId); } window.imageBookmarks=(window.imageBookmarks||[]).filter(b=>b.id!==id); renderEverything(); await saveAppDataNow(); showFeedbackMessage('북마크가 삭제되었습니다.'); };
+
+    // ===== CLIP 뷰어 =====
+    const clipFolderInput=document.getElementById('clipFolderInput');
+    const clipRefreshBtn=document.getElementById('clipRefreshBtn');
+    const clipUploadDriveBtn=document.getElementById('clipUploadDriveBtn');
+    const clipLoadDriveBtn=document.getElementById('clipLoadDriveBtn');
+    const clipClearBtn=document.getElementById('clipClearBtn');
+    const clipViewer=document.getElementById('clipViewer');
+    const clipMessage=document.getElementById('clipMessage');
+    const clipStatus=document.getElementById('clipStatus');
+    let clipFiles=[];
+    let clipLocalPages=[];
+
+    function setClipStatus(t){ if(clipStatus) clipStatus.textContent=t; }
+    function showClipMessage(t){ if(clipMessage){ clipMessage.style.display='flex'; clipMessage.innerHTML=t; } }
+    function hideClipMessage(){ if(clipMessage) clipMessage.style.display='none'; }
+    function clearClipLocal(){ for(const p of clipLocalPages){ if(p.url) URL.revokeObjectURL(p.url); } clipLocalPages=[]; if(clipViewer) clipViewer.innerHTML=''; }
+
+    async function getClipSQL(){
+      if(!clipSQLPromise){
+        clipSQLPromise=initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/'+file});
+      }
+      return clipSQLPromise;
+    }
+    function findAsciiBytes(bytes,text){ const p=[...text].map(c=>c.charCodeAt(0)); outer:for(let i=0;i<=bytes.length-p.length;i++){ for(let j=0;j<p.length;j++){ if(bytes[i+j]!==p[j]) continue outer; } return i; } return -1; }
+    function detectImageTypeBytes(bytes){ if(bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4E&&bytes[3]===0x47) return 'image/png'; if(bytes[0]===0xFF&&bytes[1]===0xD8) return 'image/jpeg'; return null; }
+    async function extractClipPreview(file,SQL){
+      const buffer=await file.arrayBuffer(); const bytes=new Uint8Array(buffer); const off=findAsciiBytes(bytes,'SQLite format 3'); if(off<0) return null;
+      const db=new SQL.Database(bytes.slice(off)); let result;
+      try{ result=db.exec('SELECT ImageData FROM CanvasPreview WHERE ImageData IS NOT NULL ORDER BY ImageWidth * ImageHeight DESC LIMIT 1'); }catch(e){ db.close(); return null; }
+      if(!result.length||!result[0].values.length){ db.close(); return null; }
+      const imageData=result[0].values[0][0]; db.close(); if(!imageData) return null;
+      const imgBytes=imageData instanceof Uint8Array?imageData:new Uint8Array(imageData); const type=detectImageTypeBytes(imgBytes); if(!type) return null;
+      return new Blob([imgBytes],{type});
+    }
+    async function loadClipFiles(files){
+      clearClipLocal(); showClipMessage('CLIP 파일 불러오는 중...'); setClipStatus('파일 확인 중...');
+      const list=files.filter(f=>f.name.toLowerCase().endsWith('.clip')).sort((a,b)=>(a.webkitRelativePath||a.name).localeCompare((b.webkitRelativePath||b.name),undefined,{numeric:true,sensitivity:'base'}));
+      if(!list.length){ showClipMessage('.clip 파일을 찾지 못했습니다.'); setClipStatus('실패: .clip 없음'); return; }
+      const SQL=await getClipSQL(); let ok=0,fail=0;
+      for(let i=0;i<list.length;i++){
+        const file=list[i]; setClipStatus(`${i+1} / ${list.length} 추출 중\n${file.name}`);
+        try{ const blob=await extractClipPreview(file,SQL); if(!blob){fail++;continue;} const url=URL.createObjectURL(blob); const img=document.createElement('img'); img.className='clip-page'; img.alt=file.name; img.src=url; clipViewer.appendChild(img); clipLocalPages.push({name:file.name.replace(/\.clip$/i,'.png'),blob,url,type:blob.type}); ok++; if(ok===1) hideClipMessage(); }catch(e){ console.error(e); fail++; }
+        await new Promise(r=>setTimeout(r,0));
+      }
+      if(ok){ hideClipMessage(); setClipStatus(`완료\n표시: ${ok}개 / 실패: ${fail}개`); } else { showClipMessage('미리보기 이미지를 찾지 못했습니다.'); setClipStatus(`실패: ${fail}개`); }
+    }
+    clipFolderInput?.addEventListener('change',async(e)=>{ clipFiles=Array.from(e.target.files||[]); await loadClipFiles(clipFiles); });
+    clipRefreshBtn?.addEventListener('click',async()=>{ if(!clipFiles.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; } await loadClipFiles(clipFiles); });
+    clipClearBtn?.addEventListener('click',()=>{ clipFiles=[]; if(clipFolderInput) clipFolderInput.value=''; clearClipLocal(); showClipMessage('CLIP 파일이 들어있는 폴더를 선택하세요.'); setClipStatus('초기화됨'); });
+    clipUploadDriveBtn?.addEventListener('click',async()=>{
+      if(!ensureLogin()) return; if(!clipLocalPages.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; }
+      const folders=await ensureDriveFolders(); const manifest=[];
+      for(let i=0;i<clipLocalPages.length;i++){
+        const p=clipLocalPages[i]; setClipStatus(`${i+1} / ${clipLocalPages.length} Drive 업로드 중\n${p.name}`);
+        const existing=await findDriveFile(p.name,folders.clipCurrent.id);
+        const uploaded=await uploadDriveMultipart({name:p.name,blob:p.blob,parentId:folders.clipCurrent.id,fileId:existing?.id||null,mimeType:p.type||'image/png'});
+        manifest.push({index:i,name:p.name,fileId:uploaded.id,mimeType:uploaded.mimeType||p.type||'image/png'});
+      }
+      currentAppData.state=currentAppData.state||{}; currentAppData.state.clipPages=manifest; await saveAppDataNow(); setClipStatus(`Drive 업로드 완료\n페이지: ${manifest.length}개`); showFeedbackMessage('CLIP 미리보기가 Drive에 저장되었습니다.');
+    });
+    async function loadClipPagesFromDrive(render=true){
+      clearClipLocal(); const pages=(currentAppData.state&&currentAppData.state.clipPages)||[]; if(!pages.length){ if(render) showClipMessage('Drive에 저장된 CLIP 미리보기가 없습니다.'); return; }
+      if(render) showClipMessage('Drive에서 CLIP 미리보기를 불러오는 중...');
+      for(let i=0;i<pages.length;i++){
+        const p=pages[i]; if(render) setClipStatus(`${i+1} / ${pages.length} Drive 다운로드 중\n${p.name}`);
+        try{ const blob=await downloadDriveBlob(p.fileId); const url=URL.createObjectURL(blob); const img=document.createElement('img'); img.className='clip-page'; img.alt=p.name; img.src=url; clipViewer.appendChild(img); clipLocalPages.push({name:p.name,blob,url,type:blob.type||p.mimeType}); if(i===0) hideClipMessage(); }catch(e){ console.warn(e); }
+      }
+      if(render){ hideClipMessage(); setClipStatus(`Drive 불러오기 완료\n표시: ${clipLocalPages.length}개`); }
+    }
+    clipLoadDriveBtn?.addEventListener('click',async()=>{ if(!ensureLogin()) return; await loadAppDataFromDrive(); renderEverything(); await loadClipPagesFromDrive(true); });
+
+    // 자동 초기 상태
+    window.isAuthReady=true;
+    setTimeout(async()=>{
+      await setupTokenClient();
+      if(!driveAccessToken){
+        setClipStatus('구글 로그인하면 Drive 데이터를 자동으로 불러옵니다.');
+      }
+    },500);
+
+    initCalendar();
+    initNotes();
+    initBookmarks();
 
 </script>
 
