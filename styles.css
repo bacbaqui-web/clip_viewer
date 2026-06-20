@@ -77,9 +77,6 @@
 /* 메모 입력 영역은 탭과 분리되게 약간 간격 */
 #notesArea{margin-top:10px}
 
-.notes-tab .tab-del{margin-left:8px;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:#555;color:#fff;font-size:12px;line-height:1}
-
-
 /* 북마크 탭도 메모 탭과 동일한 둥근 네모 스타일 */
 #bookmarkHeaderRow{margin-top:8px;margin-bottom:8px}
 #bookmarkTabsContainer{
@@ -111,10 +108,6 @@
 }
 .bookmark-tab.dragging{opacity:.3}
 .bookmark-tab.placeholder{opacity:1}
-.bookmark-tab .tab-del{margin-left:8px;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:#555;color:#fff;font-size:12px;line-height:1}
-
-
-
 /* 노동요 내부 탭: 북마크 탭과 동일한 둥근 네모 스타일 */
 #workmusicHeaderRow{margin-top:8px;margin-bottom:8px}
 #workmusicTabsContainer{
@@ -141,9 +134,19 @@
 .workmusic-tab.active{background:#111;color:#fff;border-color:#2a2a2a;z-index:2}
 .workmusic-tab.dragging{opacity:.3}
 .workmusic-tab.placeholder{opacity:1}
-.workmusic-tab .tab-del{margin-left:8px;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:#555;color:#fff;font-size:12px;line-height:1}
 .workmusic-tab .playlist-mark{display:inline-flex;align-items:center;justify-content:center;margin-right:6px;opacity:.85;vertical-align:-2px}
 .workmusic-tab .playlist-mark svg{width:14px;height:14px;display:block}
+.notes-tab,.bookmark-tab,.workmusic-tab{display:inline-flex;align-items:center;gap:6px;min-height:36px;box-sizing:border-box}
+.notes-tab .tab-label,.bookmark-tab .tab-label,.workmusic-tab .tab-label{min-width:0;max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab-settings-trigger{width:22px;height:22px;border:0;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:0 0 auto;transition:background .2s,transform .15s}
+.tab-settings-trigger:hover{background:rgba(255,255,255,.22);transform:scale(1.04)}
+.tab-settings-trigger svg{width:14px;height:14px;display:block}
+.new-inner-tab{background:#2f2f2f;border-style:dashed;color:#cfcfcf}
+.new-inner-tab:hover{background:#3b3b3b;color:#fff}
+.tab-settings-modal{background:#2a2a2a;max-width:360px;text-align:left}
+.tab-settings-title{font-size:1rem;font-weight:900;color:#fff;margin-bottom:12px;text-align:center}
+.tab-settings-icons{display:flex;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.workmusic-modal-icon-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
 
 /* 이미지 모달 상단 아이콘 컨트롤 */
 #imageModalControls{

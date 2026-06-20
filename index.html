@@ -88,25 +88,6 @@
   <div id="notes-section" class="section-card tab-content">
     <div class="flex items-center justify-between mb-2" id="notesHeaderRow">
       <div id="notesTabsContainer" class="notepad-tabs flex flex-wrap gap-2"></div>
-      <div class="flex items-center gap-2">
-        <button id="addNotesTabBtn" class="icon-btn" title="새 탭">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 5v14"/><path d="M5 12h14"/>
-          </svg>
-        </button>
-        <button id="downloadNotesBtn" class="icon-btn" title="메모 전체 다운로드">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <path d="M7 10l5 5 5-5"/>
-            <path d="M12 15V3"/>
-          </svg>
-        </button>
-        <button id="toggleNotesEditBtn" class="icon-btn" title="탭 편집">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-          </svg>
-        </button>
-      </div>
     </div>
     <textarea id="notesArea" class="w-full notes-area p-4 bg-black text-white border border-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 rounded-lg"></textarea>
   </div>
@@ -114,14 +95,6 @@
   <div id="bookmarks-section" class="section-card tab-content text-left">
     <div class="flex items-center justify-between mb-2" id="bookmarkHeaderRow">
       <div id="bookmarkTabsContainer" class="notepad-tabs flex flex-wrap gap-2"></div>
-      <div class="flex items-center gap-2">
-        <button id="addBookmarkTabBtn" class="icon-btn" title="새 북마크 탭">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-        </button>
-        <button id="toggleBookmarkEditBtn" class="icon-btn" title="북마크 탭 편집">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        </button>
-      </div>
     </div>
     <section id="drag-area" class="drag-area rounded-lg p-6 flex items-center justify-center text-center text-[#999] font-medium cursor-pointer" title="붙여넣기(Ctrl/Cmd+V)">
       <div class="text-4xl font-bold select-none">+</div>
@@ -157,17 +130,6 @@
     <div class="workmusic-panel">
       <div class="flex items-center justify-between mb-2" id="workmusicHeaderRow">
         <div id="workmusicTabsContainer" class="notepad-tabs flex flex-wrap gap-2"></div>
-        <div class="flex items-center gap-2">
-          <button id="addWorkMusicTabBtn" class="icon-btn" title="새 노동요 탭">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          </button>
-          <button id="importWorkMusicPlaylistBtn" class="icon-btn" title="유튜브/유튜브뮤직 재생목록 가져오기">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h12"/><path d="M3 12h10"/><path d="M3 18h8"/><path d="M17 10v8"/><path d="M13 14h8"/></svg>
-          </button>
-          <button id="toggleWorkMusicEditBtn" class="icon-btn" title="노동요 탭 편집">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          </button>
-        </div>
       </div>
       <section id="workmusic-drag-area" class="drag-area rounded-lg p-6 flex items-center justify-center text-center text-[#999] font-medium cursor-pointer" tabindex="0" title="유튜브 링크 붙여넣기(Ctrl/Cmd+V)">
         <div class="text-4xl font-bold select-none">+</div>
@@ -302,19 +264,25 @@
   </div>
 
 
-  <div id="workMusicTabSettingsModal" class="modal">
-    <div class="modal-content workmusic-tab-modal">
-      <input type="text" id="workMusicTabNameInput" class="workmusic-title-input" placeholder="탭 이름 수정">
-      <div class="workmusic-tab-modal-icons">
-        <button id="workMusicTabRefreshBtn" class="workmusic-modal-icon-btn" title="재생목록 새로고침" aria-label="재생목록 새로고침">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/>
-          </svg>
+  <div id="tabSettingsModal" class="modal">
+    <div class="modal-content tab-settings-modal">
+      <div id="tabSettingsTitle" class="tab-settings-title">탭 설정</div>
+      <input type="text" id="tabSettingsNameInput" class="workmusic-title-input" placeholder="탭 이름">
+      <div class="tab-settings-icons">
+        <button id="tabSettingsMoveLeftBtn" class="workmusic-modal-icon-btn" title="왼쪽으로 이동" aria-label="왼쪽으로 이동">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <button id="workMusicTabSaveBtn" class="workmusic-modal-icon-btn" title="탭 이름 저장" aria-label="탭 이름 저장">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5"/>
-          </svg>
+        <button id="tabSettingsMoveRightBtn" class="workmusic-modal-icon-btn" title="오른쪽으로 이동" aria-label="오른쪽으로 이동">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button id="tabSettingsBackupBtn" class="workmusic-modal-icon-btn" title="탭 내용 백업" aria-label="탭 내용 백업">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+        <button id="tabSettingsDeleteBtn" class="workmusic-modal-icon-btn danger" title="탭 삭제" aria-label="탭 삭제">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 15h10l1-15"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
+        <button id="tabSettingsSaveBtn" class="workmusic-modal-icon-btn" title="저장" aria-label="저장">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
         </button>
       </div>
     </div>

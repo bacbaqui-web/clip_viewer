@@ -1,9 +1,9 @@
+import { downloadTextFile, openTabSettings, renderManagedTab, escapeHtml } from './tabSettings.js';
+
 export function initBookmarks(){
   const imageGrid=document.getElementById('image-grid');
   const dragArea=document.getElementById('drag-area');
   const tabsContainer=document.getElementById('bookmarkTabsContainer');
-  const addTabBtn=document.getElementById('addBookmarkTabBtn');
-  const toggleEditBtn=document.getElementById('toggleBookmarkEditBtn');
   const imageModal = document.getElementById('imageModal');
   const modalImage = document.getElementById('modalImage');
   const closeImageModalBtn = document.getElementById('closeImageModalBtn');
@@ -16,18 +16,8 @@ export function initBookmarks(){
   const saveTitleBtn = document.getElementById('saveTitleBtn');
   const cancelTitleBtn = document.getElementById('cancelTitleBtn');
   const currentUrlDisplay = document.getElementById('currentUrlDisplay');
-  let editMode=false;
   let currentModalBookmark=null;
-  let tabClickTimer=null;
-  const TAB_CLICK_DELAY_MS=220;
   const genId=()=> 'btab_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
-  const escapeHtml=(str)=>String(str??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
-  const promptTabName=(title,current='')=>{
-    const name=prompt(title,current);
-    if(name===null) return null;
-    const trimmed=name.trim().slice(0,20);
-    return trimmed || null;
-  };
   const getTabs=()=>{
     const tabs=Array.isArray(window.__bookmarkTabList)&&window.__bookmarkTabList.length ? window.__bookmarkTabList : [{id:'default',name:'기본',order:0}];
     return [...tabs].sort((a,b)=>(a.order??0)-(b.order??0));
@@ -36,20 +26,12 @@ export function initBookmarks(){
     if(!tabsContainer) return;
     const tabs=getTabs();
     if(!tabs.some(t=>t.id===window.__bookmarkActiveTabId)) window.__bookmarkActiveTabId=tabs[0]?.id||'default';
-    tabsContainer.innerHTML='';
-    tabs.forEach(t=>{
-      const btn=document.createElement('button');
-      btn.className='bookmark-tab'+(t.id===window.__bookmarkActiveTabId?' active':'');
-      btn.dataset.tabId=t.id;
-      btn.draggable=editMode;
-      btn.innerHTML=`<span class="tab-label">${escapeHtml(t.name||'탭')}</span>${editMode?`<span class="tab-del" title="삭제">×</span>`:''}`;
-      tabsContainer.appendChild(btn);
-    });
-    if(toggleEditBtn){
-      toggleEditBtn.innerHTML= editMode
-      ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
-    }
+    tabsContainer.innerHTML=tabs.map(t=>renderManagedTab({
+      className:'bookmark-tab',
+      id:t.id,
+      label:t.name||'탭',
+      active:t.id===window.__bookmarkActiveTabId
+    })).join('') + renderManagedTab({className:'bookmark-tab',newTab:true});
   };
   function getYoutubeThumbnail(url) {
     let videoId = null;
@@ -299,46 +281,75 @@ export function initBookmarks(){
   window.renderImageBookmarks=renderImageBookmarks;
   window.renderBookmarkTabsUI=renderTabs;
 
+  const backupBookmarkTab=(tabId)=>{
+    const tab=getTabs().find(t=>t.id===tabId);
+    const rows=(window.imageBookmarks||[]).filter(b=>(b.bookmarkTabId||'default')===tabId);
+    const now=new Date();
+    const pad=n=>String(n).padStart(2,'0');
+    const safeName=String(tab?.name||'bookmarks').replace(/[\\/:*?"<>|#%{}~&]/g,'_').trim()||'bookmarks';
+    downloadTextFile(
+      `${safeName}_bookmarks_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.json`,
+      JSON.stringify({tab,bookmarks:rows,exportedAt:now.toISOString()},null,2),
+      'application/json;charset=utf-8'
+    );
+    window.showFeedbackMessage?.('북마크 탭을 백업했습니다.');
+  };
+
+  const openBookmarkTabSettings=(tabId)=>{
+    const tab=getTabs().find(t=>t.id===tabId);
+    if(!tab) return;
+    openTabSettings({
+      title:'북마크 탭 설정',
+      tab,
+      getTabs,
+      onSave:async(id,name)=>{
+        if(!window.ensureLogin?.()) return;
+        await window.cloudRenameBookmarkTab?.(id,name);
+        window.showFeedbackMessage?.('북마크 탭 이름이 변경되었습니다.');
+      },
+      onDelete:async(id)=>{ await window.cloudDeleteBookmarkTab?.(id); },
+      onBackup:async(id)=>backupBookmarkTab(id),
+      onReorder:async(next)=>{ await window.cloudReorderBookmarkTabs?.(next); }
+    });
+  };
+
+  const openBookmarkTabCreate=()=>{
+    openTabSettings({
+      title:'북마크 새 탭',
+      create:true,
+      defaultName:'새 탭',
+      getTabs,
+      onCreate:async(name)=>{
+        if(!window.ensureLogin?.()) return;
+        const id=genId();
+        await window.cloudAddBookmarkTab?.({id,name});
+      }
+    });
+  };
+
   tabsContainer?.addEventListener('click', async (e)=>{
+    const settingsBtn=e.target.closest('[data-action="tab-settings"]');
+    if(settingsBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      const tabBtn=settingsBtn.closest('.bookmark-tab');
+      if(tabBtn?.dataset.tabId) openBookmarkTabSettings(tabBtn.dataset.tabId);
+      return;
+    }
+    if(e.target.closest('[data-action="new-tab"]')){
+      openBookmarkTabCreate();
+      return;
+    }
     const tabBtn=e.target.closest('.bookmark-tab');
     if(!tabBtn) return;
     const tabId=tabBtn.dataset.tabId;
-    if(editMode && e.target.classList.contains('tab-del')){
-      clearTimeout(tabClickTimer);
-      if(!confirm('이 탭과 탭 안의 북마크를 삭제할까요?')) return;
-      window.cloudDeleteBookmarkTab && await window.cloudDeleteBookmarkTab(tabId);
-      return;
-    }
-    clearTimeout(tabClickTimer);
-    tabClickTimer=setTimeout(async()=>{
-      window.__bookmarkActiveTabId=tabId;
-      window.cloudSetActiveBookmarkTab && await window.cloudSetActiveBookmarkTab(tabId);
-      renderAll();
-    },TAB_CLICK_DELAY_MS);
+    window.__bookmarkActiveTabId=tabId;
+    await window.cloudSetActiveBookmarkTab?.(tabId);
+    renderAll();
   });
-  tabsContainer?.addEventListener('dblclick', async (e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    clearTimeout(tabClickTimer);
-    if(e.target.classList.contains('tab-del')) return;
-    const tabBtn=e.target.closest('.bookmark-tab'); if(!tabBtn) return;
-    if(!window.ensureLogin?.()) return;
-    const tabId=tabBtn.dataset.tabId;
-    const cur=getTabs().find(t=>t.id===tabId);
-    const trimmed=promptTabName('탭 이름 변경', cur?.name||'');
-    if(!trimmed || trimmed===(cur?.name||'')) return;
-    window.cloudRenameBookmarkTab && await window.cloudRenameBookmarkTab(tabId, trimmed);
-    window.showFeedbackMessage?.('북마크 탭 이름이 변경되었습니다.');
-  });
-  addTabBtn?.addEventListener('click', async ()=>{
-    const trimmed=promptTabName('새 북마크 탭 이름','새 탭');
-    if(!trimmed) return;
-    const id=genId();
-    window.cloudAddBookmarkTab && await window.cloudAddBookmarkTab({id,name:trimmed});
-  });
-  toggleEditBtn?.addEventListener('click',()=>{ editMode=!editMode; renderTabs(); });
 
   let draggingEl=null, placeholderEl=null;
+  const editMode=false;
   function ensurePlaceholder(width){
     if(placeholderEl) return;
     placeholderEl=document.createElement('div');

@@ -1,3 +1,5 @@
+import { downloadTextFile, openTabSettings, renderManagedTab } from './tabSettings.js';
+
 export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {}) {
     const APP_CONFIG = window.APP_CONFIG || {};
     const YOUTUBE_API_KEY = APP_CONFIG.youtubeApiKey || '';
@@ -13,9 +15,6 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
     window.currentWorkMusicSettingIndex = null;
 
     const workMusicTabsContainer = document.getElementById('workmusicTabsContainer');
-    const addWorkMusicTabBtn = document.getElementById('addWorkMusicTabBtn');
-    const importWorkMusicPlaylistBtn = document.getElementById('importWorkMusicPlaylistBtn');
-    const toggleWorkMusicEditBtn = document.getElementById('toggleWorkMusicEditBtn');
     const workMusicDragArea = document.getElementById('workmusic-drag-area');
     const workMusicPrevBtn = document.getElementById('workMusicPrevBtn');
     const workMusicPlayBtn = document.getElementById('workMusicPlayBtn');
@@ -42,10 +41,6 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
     const workMusicRemoteMuteBtn = document.getElementById('workMusicRemoteMuteBtn');
     const workMusicRemoteVolumeRange = document.getElementById('workMusicRemoteVolumeRange');
     const workMusicRemoteVolumePercent = document.getElementById('workMusicRemoteVolumePercent');
-    const workMusicTabSettingsModal = document.getElementById('workMusicTabSettingsModal');
-    const workMusicTabNameInput = document.getElementById('workMusicTabNameInput');
-    const workMusicTabRefreshBtn = document.getElementById('workMusicTabRefreshBtn');
-    const workMusicTabSaveBtn = document.getElementById('workMusicTabSaveBtn');
     let workMusicIframe = null;
     let workMusicPlayer = null;
     let workMusicSyncTimer = null;
@@ -1135,18 +1130,12 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
       showFeedbackMessage(`${tabName} 탭에 ${newSongs.length}개를 추가했습니다.`);
     }
 
-    async function importWorkMusicPlaylistPrompt(){
-      if(!window.ensureLogin || !window.ensureLogin()) return;
-      let fromClipboard = '';
-      try{ fromClipboard = await navigator.clipboard.readText(); }catch(_){/* ignore */}
-      const suggested = extractYoutubePlaylistId(fromClipboard) ? fromClipboard : '';
-      const link = prompt('유튜브/유튜브뮤직 재생목록 링크', suggested);
-      if(link === null) return;
-      await importWorkMusicPlaylistFromLink(link);
-    }
-
     async function addWorkMusicFromText(raw){
       if(!window.ensureLogin || !window.ensureLogin()) return false;
+      if(extractYoutubePlaylistId(raw)){
+        await importWorkMusicPlaylistFromLink(raw);
+        return true;
+      }
       const videoId = extractYoutubeVideoId(raw);
       if(!videoId){ showAlert('유튜브 링크만 추가할 수 있습니다.'); return false; }
       window.workMusicSongs = window.workMusicSongs || [];
@@ -1181,22 +1170,17 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
       if(!workMusicTabsContainer) return;
       const tabs = getWorkMusicTabs();
       if(!tabs.some(t=>t.id===window.__workMusicActiveTabId)) window.__workMusicActiveTabId = tabs[0]?.id || 'default';
-      workMusicTabsContainer.innerHTML = '';
-      tabs.forEach(t=>{
-        const btn = document.createElement('button');
-        btn.className = 'workmusic-tab' + (t.id === window.__workMusicActiveTabId ? ' active' : '');
-        btn.dataset.tabId = t.id;
-        btn.draggable = !!window.__workMusicEditMode;
+      workMusicTabsContainer.innerHTML = tabs.map(t=>{
         const playlistId = getWorkMusicTabPlaylistId(t.id);
         const mark = playlistId ? `<span class="playlist-mark" title="재생목록 탭">${workMusicPlaylistMarkSvg}</span>` : '';
-        btn.innerHTML = `${mark}<span class="tab-label">${escapeHtml(t.name || '탭')}</span>${window.__workMusicEditMode ? `<span class="tab-del" title="삭제">×</span>` : ''}`;
-        workMusicTabsContainer.appendChild(btn);
-      });
-      if(toggleWorkMusicEditBtn){
-        toggleWorkMusicEditBtn.innerHTML = window.__workMusicEditMode
-          ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`
-          : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
-      }
+        return renderManagedTab({
+          className:'workmusic-tab',
+          id:t.id,
+          label:t.name || '탭',
+          active:t.id === window.__workMusicActiveTabId,
+          prefix:mark
+        });
+      }).join('') + renderManagedTab({className:'workmusic-tab',newTab:true});
     }
 
     function renderWorkMusicAll(){
@@ -1215,33 +1199,55 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
       renderWorkMusicIframe(getWorkMusicInitialDisplayIndex(), false);
     }
 
+    function backupWorkMusicTab(tabId){
+      const tab = getWorkMusicTabs().find(t=>t.id===tabId);
+      if(!tab) return;
+      const songs=(window.workMusicSongs||[]).filter(s=>(s.workMusicTabId||'default')===tabId);
+      const now=new Date();
+      const pad=n=>String(n).padStart(2,'0');
+      const safeName=String(tab.name||'workmusic').replace(/[\\/:*?"<>|#%{}~&]/g,'_').trim()||'workmusic';
+      downloadTextFile(
+        `${safeName}_workmusic_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.json`,
+        JSON.stringify({tab,songs,exportedAt:now.toISOString()},null,2),
+        'application/json;charset=utf-8'
+      );
+      showFeedbackMessage('노동요 탭을 백업했습니다.');
+    }
+
     function openWorkMusicTabSettings(tabId){
       const tab = getWorkMusicTabs().find(t=>t.id===tabId);
       if(!tab) return;
-      window.currentWorkMusicTabSettingId = tabId;
-      if(workMusicTabNameInput) workMusicTabNameInput.value = tab.name || '';
-      if(workMusicTabRefreshBtn){
-        const hasPlaylist = !!getWorkMusicTabPlaylistId(tabId);
-        workMusicTabRefreshBtn.style.display = hasPlaylist ? 'inline-flex' : 'none';
-      }
-      if(workMusicTabSettingsModal) workMusicTabSettingsModal.style.display = 'flex';
-      setTimeout(()=>{ workMusicTabNameInput?.focus(); workMusicTabNameInput?.select(); }, 50);
+      openTabSettings({
+        title:'노동요 탭 설정',
+        tab,
+        getTabs:getWorkMusicTabs,
+        onSave:async(id,name)=>{ await window.cloudRenameWorkMusicTab?.(id,name); },
+        onDelete:async(id)=>{ await window.cloudDeleteWorkMusicTab?.(id); },
+        onBackup:async(id)=>backupWorkMusicTab(id),
+        onReorder:async(next)=>{ await window.cloudReorderWorkMusicTabs?.(next); }
+      });
     }
 
-    function closeWorkMusicTabSettings(){
-      window.currentWorkMusicTabSettingId = null;
-      if(workMusicTabSettingsModal) workMusicTabSettingsModal.style.display = 'none';
-    }
-
-    async function saveWorkMusicTabName(){
-      if(!window.ensureLogin || !window.ensureLogin()) return;
-      const tabId = window.currentWorkMusicTabSettingId;
-      if(!tabId) return;
-      const name = (workMusicTabNameInput?.value || '').trim().slice(0,20);
-      if(!name) return;
-      window.__workMusicTabList = getWorkMusicTabs().map(t=>t.id===tabId ? {...t, name} : t);
-      renderWorkMusicTabsUI();
-      await window.cloudRenameWorkMusicTab?.(tabId, name);
+    function openWorkMusicTabCreate(){
+      openTabSettings({
+        title:'노동요 새 탭',
+        create:true,
+        defaultName:'새 탭',
+        getTabs:getWorkMusicTabs,
+        onCreate:async(name)=>{
+          if(!window.ensureLogin || !window.ensureLogin()) return;
+          ensureWorkMusicDefaultTabs();
+          const id = 'wtab_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
+          const tabs = getWorkMusicTabs();
+          const order = tabs.length ? Math.max(...tabs.map(t=>Number(t.order||0))) + 10 : 0;
+          window.__workMusicTabList = [...tabs, {id, name, order}];
+          window.__workMusicActiveTabId = id;
+          window.workMusicCurrentIndex = 0;
+          window.workMusicIsPlaying = false;
+          renderWorkMusicAll();
+          await window.cloudAddWorkMusicTab?.({id, name, order});
+        }
+      });
     }
 
     async function refreshWorkMusicPlaylistTab(tabId){
@@ -1298,51 +1304,22 @@ export function initWorkMusic({ showTab = (tabId)=>window.showTab?.(tabId) } = {
       setTimeout(fillMissingWorkMusicTitles, 600);
       setTimeout(fillMissingWorkMusicDurations, 1200);
       workMusicTabsContainer?.addEventListener('click', async (e)=>{
+        const settingsBtn=e.target.closest('[data-action="tab-settings"]');
+        if(settingsBtn){
+          e.preventDefault();
+          e.stopPropagation();
+          const tabBtn=settingsBtn.closest('.workmusic-tab');
+          if(tabBtn?.dataset.tabId) openWorkMusicTabSettings(tabBtn.dataset.tabId);
+          return;
+        }
+        if(e.target.closest('[data-action="new-tab"]')){
+          openWorkMusicTabCreate();
+          return;
+        }
         const tabBtn = e.target.closest('.workmusic-tab');
         if(!tabBtn) return;
         const tabId = tabBtn.dataset.tabId;
-        if(window.__workMusicEditMode && e.target.classList.contains('tab-del')){
-          if(!confirm('이 탭과 탭 안의 노동요를 삭제할까요?')) return;
-          await window.cloudDeleteWorkMusicTab?.(tabId);
-          return;
-        }
         await switchWorkMusicTab(tabId);
-      });
-      workMusicTabsContainer?.addEventListener('dblclick', async (e)=>{
-        const tabBtn = e.target.closest('.workmusic-tab');
-        if(!tabBtn) return;
-        openWorkMusicTabSettings(tabBtn.dataset.tabId);
-      });
-      addWorkMusicTabBtn?.addEventListener('click', async ()=>{
-        if(!window.ensureLogin || !window.ensureLogin()) return;
-        ensureWorkMusicDefaultTabs();
-        const name = prompt('새 노동요 탭 이름', '새 탭');
-        if(name === null) return;
-        const trimmed = name.trim().slice(0,20);
-        if(!trimmed) return;
-        const id = 'wtab_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
-        const tabs = getWorkMusicTabs();
-        const order = tabs.length ? Math.max(...tabs.map(t=>Number(t.order||0))) + 10 : 0;
-        window.__workMusicTabList = [...tabs, {id, name: trimmed, order}];
-        window.__workMusicActiveTabId = id;
-        window.workMusicCurrentIndex = 0;
-        window.workMusicIsPlaying = false;
-        renderWorkMusicAll();
-        try{
-          await window.cloudAddWorkMusicTab?.({id, name: trimmed, order});
-        }catch(err){
-          console.error(err);
-          showAlert('노동요 탭을 저장하는 중 오류가 발생했습니다.');
-        }
-      });
-      importWorkMusicPlaylistBtn?.addEventListener('click', importWorkMusicPlaylistPrompt);
-      workMusicTabSaveBtn?.addEventListener('click', async ()=>{ await saveWorkMusicTabName(); closeWorkMusicTabSettings(); });
-      workMusicTabRefreshBtn?.addEventListener('click', async ()=>{ const tabId = window.currentWorkMusicTabSettingId; await saveWorkMusicTabName(); closeWorkMusicTabSettings(); if(tabId) await refreshWorkMusicPlaylistTab(tabId); });
-      workMusicTabSettingsModal?.addEventListener('click', async (e)=>{ if(e.target === workMusicTabSettingsModal){ await saveWorkMusicTabName(); closeWorkMusicTabSettings(); } });
-      workMusicTabNameInput?.addEventListener('keydown', async (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); await saveWorkMusicTabName(); closeWorkMusicTabSettings(); } if(e.key === 'Escape'){ e.preventDefault(); closeWorkMusicTabSettings(); } });
-      toggleWorkMusicEditBtn?.addEventListener('click', ()=>{
-        window.__workMusicEditMode = !window.__workMusicEditMode;
-        renderWorkMusicTabsUI();
       });
       let workMusicDraggingEl = null, workMusicPlaceholderEl = null;
       function ensureWorkMusicPlaceholder(width){
