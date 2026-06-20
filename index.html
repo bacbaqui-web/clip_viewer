@@ -331,7 +331,7 @@
   <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-[1001] flex items-center justify-center hidden">
     <div class="flex flex-col items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-white"></div>
-      <p class="text-white mt-4 text-lg">데이터를 불러오는 중...</p>
+      <p class="text-white mt-4 text-lg">Google Drive에서 데이터를 다운로드 중...</p>
     </div>
   </div>
 
@@ -392,7 +392,7 @@
           try{ await waiting; }
           catch(err){
             console.error(err);
-            window.showAlert?.('데이터를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+            window.showAlert?.('Google Drive에서 데이터를 다운로드하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
           }
           finally{ document.getElementById('loading-overlay')?.classList.add('hidden'); }
         }

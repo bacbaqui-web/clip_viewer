@@ -196,9 +196,9 @@ export function initClipViewer({
     clearClipLocal();
     const pages=getClipPages();
     if(!pages.length){ if(render) showClipMessage(getEmptyClipMessage()); return; }
-    if(render) showClipMessage('Drive에서 CLIP 미리보기를 불러오는 중...');
+    if(render) showClipMessage('Google Drive에서 CLIP 미리보기를 다운로드 중...');
     for(let i=0;i<pages.length;i++){
-      const p=pages[i]; if(render) setClipStatus(`${i+1} / ${pages.length} Drive 다운로드 중\n${p.name}`);
+      const p=pages[i]; if(render) setClipStatus(`${i+1} / ${pages.length} Google Drive 다운로드 중\n${p.name}`);
       try{ const blob=await downloadDriveBlob(p.fileId); const url=URL.createObjectURL(blob); const img=document.createElement('img'); img.className='clip-page'; img.alt=p.name; img.src=url; clipViewer.appendChild(img); clipLocalPages.push({name:p.name,blob,url,type:blob.type||p.mimeType}); if(i===0) hideClipMessage(); }catch(e){ console.warn(e); }
     }
     if(render){ hideClipMessage(); setClipStatus(`Drive 불러오기 완료\n표시: ${clipLocalPages.length}개`); }

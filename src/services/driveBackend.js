@@ -56,7 +56,11 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     let deferredAppDataError=null;
     let clipPagesRendered=false;
     let autoSignInAttempting=false;
+    let userHasInteracted=false;
     window.__unsubs=[];
+    ['pointerdown','keydown','touchstart'].forEach(type=>{
+      window.addEventListener(type,()=>{ userHasInteracted=true; },{once:true,capture:true});
+    });
 
     function getGoogleClientId(){
       return DEFAULT_GOOGLE_CLIENT_ID;
@@ -356,7 +360,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         if(!ok) return;
       }
       autoSignInAttempting=true;
-      setDriveBusy('Google 로그인 확인 중...');
+      setDriveBusy('Google Drive 데이터 확인 중...');
       requestGoogleAccessToken({prompt:'', mode:'silent'});
     }
 
@@ -854,16 +858,15 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
           applyAppData(cachedData);
           renderEverything();
           loadingOverlay.classList.add('hidden');
-          setDriveStatus('로컬 캐시 불러옴');
+          setDriveStatus('로컬 캐시 표시 중');
         }
         await loadCalendarPartFromDrive();
         renderEverything();
         loadingOverlay.classList.add('hidden');
-        window.showFeedbackMessage(cachedData ? '최신 달력 데이터를 확인했습니다.' : '달력 데이터를 불러왔습니다.');
         deferredAppDataLoaded=false;
         deferredAppDataError=null;
         deferredAppDataPromise=loadDeferredAppDataFromDrive()
-          .then(()=>{ deferredAppDataLoaded=true; window.showFeedbackMessage?.('나머지 데이터를 불러왔습니다.'); })
+          .then(()=>{ deferredAppDataLoaded=true; })
           .catch(e=>{ deferredAppDataError=e; console.error(e); setDriveStatus('일부 데이터 로드 실패', true); });
       }catch(e){
         console.error(e); window.showAlert('Google Drive 데이터 로드 실패: '+(e.message||e));
@@ -889,9 +892,12 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     };
 
     window.ensureLogin=()=>{
-      if(!window.isAuthReady){ window.showAlert('데이터 로딩 중입니다.'); return false; }
+      if(!window.isAuthReady){ window.showAlert('Google Drive에서 데이터를 다운로드 준비 중입니다.'); return false; }
       if(autoSignInAttempting) return false;
-      if(!driveAccessToken){ window.showAlert('구글 로그인 후 이용해 주세요.'); return false; }
+      if(!driveAccessToken){
+        if(userHasInteracted) window.showAlert('Google 로그인 후 이용해 주세요.');
+        return false;
+      }
       return true;
     };
     window.waitForFeatureData=(tabId)=>{
@@ -1043,7 +1049,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     if(startupCachedData){
       applyAppData(startupCachedData);
       renderEverything();
-      setDriveStatus('로컬 캐시 불러옴');
+      setDriveStatus('로컬 캐시 표시 중');
     }
     setTimeout(async()=>{
       await setupTokenClient();
