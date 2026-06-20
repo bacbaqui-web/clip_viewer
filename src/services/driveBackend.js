@@ -24,6 +24,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     const DRIVE_CLIP_FILE = DRIVE_FILES.clipviewer || 'clipviewer.json';
     const DEFAULT_GOOGLE_CLIENT_ID = DRIVE_APP_CONFIG.googleClientId || '';
     const AUTO_LOGIN_STORAGE_KEY = 'magamiscoming.autoLogin';
+    const LAST_CACHE_USER_STORAGE_KEY = 'magamiscoming.lastCacheUser';
     const LOCAL_APP_CACHE_PREFIX = 'magamiscoming.appData.';
     const DRIVE_BLOB_CACHE_NAME = 'magamiscoming-drive-blobs-v1';
     const SAVE_DELAY_MS = 450;
@@ -54,6 +55,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     let deferredAppDataLoaded=false;
     let deferredAppDataError=null;
     let clipPagesRendered=false;
+    let autoSignInAttempting=false;
     window.__unsubs=[];
 
     function getGoogleClientId(){
@@ -74,6 +76,15 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     function getLocalAppCacheKey(user=driveUser){
       return LOCAL_APP_CACHE_PREFIX + getLocalCacheUserKey(user);
     }
+    function rememberLastCacheUser(user=driveUser){
+      try{ localStorage.setItem(LAST_CACHE_USER_STORAGE_KEY,getLocalCacheUserKey(user)); }catch(_){}
+    }
+    function readLastLocalAppDataCache(){
+      try{
+        const key=localStorage.getItem(LAST_CACHE_USER_STORAGE_KEY);
+        return key ? readLocalAppDataCache({email:key}) : null;
+      }catch(_){ return null; }
+    }
     function readLocalAppDataCache(user=driveUser){
       try{
         const raw=localStorage.getItem(getLocalAppCacheKey(user));
@@ -86,10 +97,12 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       try{
         if(!data || typeof data!=='object') return;
         localStorage.setItem(getLocalAppCacheKey(user),JSON.stringify({version:1,cachedAt:new Date().toISOString(),data}));
+        rememberLastCacheUser(user);
       }catch(e){ console.warn('local app cache write failed',e); }
     }
     function clearLocalAppDataCache(user=driveUser){
       try{ localStorage.removeItem(getLocalAppCacheKey(user)); }catch(_){}
+      try{ localStorage.removeItem(LAST_CACHE_USER_STORAGE_KEY); }catch(_){}
     }
 
     function driveBlobCacheUrl(fileId){
@@ -298,6 +311,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
             rememberAutoLogin();
             await afterGoogleLogin();
           }else{
+            autoSignInAttempting=false;
             if(requestMode==='silent'){
               hideDriveStatus();
               console.info('Silent Google login skipped', resp);
@@ -309,6 +323,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         error_callback:(err)=>{
           const requestMode=googleTokenRequestMode;
           googleTokenRequestMode='manual';
+          autoSignInAttempting=false;
           if(requestMode==='silent'){
             hideDriveStatus();
             console.info('Silent Google login unavailable', err);
@@ -330,6 +345,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         const ok=await setupTokenClient();
         if(!ok) return;
       }
+      rememberAutoLogin();
       requestGoogleAccessToken({prompt: driveAccessToken ? '' : 'consent', mode:'manual'});
     }
 
@@ -339,6 +355,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
         const ok=await setupTokenClient();
         if(!ok) return;
       }
+      autoSignInAttempting=true;
       setDriveBusy('Google 로그인 확인 중...');
       requestGoogleAccessToken({prompt:'', mode:'silent'});
     }
@@ -824,6 +841,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
     }
 
     async function afterGoogleLogin(){
+      autoSignInAttempting=false;
       loadingOverlay.classList.remove('hidden');
       try{
         driveUser=await getUserProfile();
@@ -860,6 +878,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
       clearDriveBlobCache();
       driveAccessToken=null; driveReady=false; driveUser=null; driveFolders=null; appDataFileId=null;
       deferredAppDataPromise=null; deferredAppDataLoaded=false; deferredAppDataError=null; clipPagesRendered=false;
+      autoSignInAttempting=false;
       updateProfileUI(null); signOutBtn.classList.add('hidden'); signInBtn.classList.remove('hidden');
       window.isAuthReady=true;
       window.customTasks=[]; window.taskStatus={}; window.imageBookmarks=[]; window.__notesTabs={}; window.__notesTabList=[{id:'memo',name:'메모',order:0}]; window.__notesActiveTabId='memo'; window.__bookmarkTabList=[{id:'default',name:'기본',order:0}]; window.__bookmarkActiveTabId='default'; window.__workMusicTabList=[{id:'default',name:'기본',order:0}]; window.__workMusicActiveTabId='default'; window.workMusicSongs=[];
@@ -871,6 +890,7 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
 
     window.ensureLogin=()=>{
       if(!window.isAuthReady){ window.showAlert('데이터 로딩 중입니다.'); return false; }
+      if(autoSignInAttempting) return false;
       if(!driveAccessToken){ window.showAlert('구글 로그인 후 이용해 주세요.'); return false; }
       return true;
     };
@@ -1019,6 +1039,12 @@ export function initDriveBackend({ initCalendar, initNotes, initBookmarks, initW
 
     // 자동 초기 상태
     window.isAuthReady=true;
+    const startupCachedData=readLastLocalAppDataCache();
+    if(startupCachedData){
+      applyAppData(startupCachedData);
+      renderEverything();
+      setDriveStatus('로컬 캐시 불러옴');
+    }
     setTimeout(async()=>{
       await setupTokenClient();
       if(!driveAccessToken){
