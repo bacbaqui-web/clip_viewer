@@ -7,6 +7,7 @@ export function initClipViewer({
   downloadDriveBlob,
   getClipPages = () => [],
   saveClipManifest = async () => {},
+  beginDriveUploadBatch = () => () => {},
   loadAppDataFromDrive = async () => {},
   renderEverything = () => {}
 } = {}) {
@@ -35,6 +36,7 @@ export function initClipViewer({
   function showClipMessage(t){ if(clipMessage){ clipMessage.style.display='flex'; clipMessage.innerHTML=t; } }
   function hideClipMessage(){ if(clipMessage) clipMessage.style.display='none'; }
   function clearClipLocal(){ for(const p of clipLocalPages){ if(p.url) URL.revokeObjectURL(p.url); } clipLocalPages=[]; if(clipViewer) clipViewer.innerHTML=''; }
+  window.clearClipLocal = clearClipLocal;
 
   async function getClipSQL(){
     if(!clipSQLPromise){
@@ -163,11 +165,16 @@ export function initClipViewer({
     if(!clipLocalPages.length){ setClipStatus('먼저 CLIP 폴더를 열어주세요.'); return; }
     const clipCurrent=await ensureClipCurrentFolder();
     const manifest=[];
-    for(let i=0;i<clipLocalPages.length;i++){
-      const p=clipLocalPages[i]; setClipStatus(`${i+1} / ${clipLocalPages.length} Drive 업로드 중\n${p.name}`);
-      const existing=await findDriveFile(p.name,clipCurrent.id);
-      const uploaded=await uploadDriveMultipart({name:p.name,blob:p.blob,parentId:clipCurrent.id,fileId:existing?.id||null,mimeType:p.type||'image/png'});
-      manifest.push({index:i,name:p.name,fileId:uploaded.id,mimeType:uploaded.mimeType||p.type||'image/png'});
+    const finishUploadBatch=beginDriveUploadBatch(clipLocalPages.length,'CLIP Drive 업로드');
+    try{
+      for(let i=0;i<clipLocalPages.length;i++){
+        const p=clipLocalPages[i]; setClipStatus(`${i+1} / ${clipLocalPages.length} Drive 업로드 중\n${p.name}`);
+        const existing=await findDriveFile(p.name,clipCurrent.id);
+        const uploaded=await uploadDriveMultipart({name:p.name,blob:p.blob,parentId:clipCurrent.id,fileId:existing?.id||null,mimeType:p.type||'image/png'});
+        manifest.push({index:i,name:p.name,fileId:uploaded.id,mimeType:uploaded.mimeType||p.type||'image/png'});
+      }
+    }finally{
+      finishUploadBatch();
     }
     await saveClipManifest(manifest);
     setClipStatus(`Drive 업로드 완료\n페이지: ${manifest.length}개`);

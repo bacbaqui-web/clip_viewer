@@ -51,7 +51,8 @@ export function initDriveBackend({
   let driveReady = false;
   let driveFolders = null;
   let appDataFileId = null;
-  let driveSaveTimer = null;
+  let nonNotesSaveTimer = null;
+  let notesSaveTimer = null;
   let driveSaveQueue = Promise.resolve();
   let notesSaveRunPromise = null;
   let notesSaveQueued = false;
@@ -62,6 +63,15 @@ export function initDriveBackend({
   let clipPagesRendered = false;
   let autoSignInAttempting = false;
   let userHasInteracted = false;
+  let pendingDriveUploads = 0;
+  let driveUploadProgress = {
+    active: false,
+    planned: false,
+    pending: 0,
+    completed: 0,
+    total: 0,
+    label: 'Drive 업로드'
+  };
   window.__unsubs = [];
   ['pointerdown', 'keydown', 'touchstart'].forEach((type) => {
     window.addEventListener(
@@ -71,6 +81,12 @@ export function initDriveBackend({
       },
       { once: true, capture: true }
     );
+  });
+  window.addEventListener('beforeunload', (e) => {
+    if (pendingDriveUploads <= 0 && !driveUploadProgress.active) return;
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
   });
 
   function getGoogleClientId() {
@@ -233,6 +249,66 @@ export function initDriveBackend({
   function hideDriveStatus() {
     if (driveSaveIndicator) driveSaveIndicator.classList.remove('show');
   }
+  function updateDriveUploadProgress(autoHide = false) {
+    const total = Math.max(1, Number(driveUploadProgress.total || 0));
+    const completed = Math.min(total, Number(driveUploadProgress.completed || 0));
+    const percent = Math.floor((completed / total) * 100);
+    setDriveStatus(`${driveUploadProgress.label} ${completed}/${total} (${percent}%)`, autoHide);
+  }
+  function beginDriveUploadBatch(total, label = 'Drive 업로드') {
+    driveUploadProgress = {
+      active: true,
+      planned: true,
+      pending: 0,
+      completed: 0,
+      total: Math.max(1, Number(total || 0)),
+      label
+    };
+    updateDriveUploadProgress(false);
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      if (
+        driveUploadProgress.pending <= 0 &&
+        driveUploadProgress.completed < driveUploadProgress.total
+      ) {
+        driveUploadProgress.active = false;
+      }
+    };
+  }
+  function beginDriveUpload(label = 'Drive 업로드') {
+    if (!driveUploadProgress.active) {
+      driveUploadProgress = {
+        active: true,
+        planned: false,
+        pending: 0,
+        completed: 0,
+        total: 0,
+        label
+      };
+    }
+    pendingDriveUploads += 1;
+    driveUploadProgress.pending += 1;
+    if (!driveUploadProgress.planned) driveUploadProgress.total += 1;
+    updateDriveUploadProgress(false);
+  }
+  function finishDriveUpload() {
+    pendingDriveUploads = Math.max(0, pendingDriveUploads - 1);
+    driveUploadProgress.pending = Math.max(0, driveUploadProgress.pending - 1);
+    driveUploadProgress.completed = Math.min(
+      Math.max(1, driveUploadProgress.total),
+      driveUploadProgress.completed + 1
+    );
+    const complete =
+      driveUploadProgress.pending <= 0 &&
+      driveUploadProgress.completed >= driveUploadProgress.total;
+    updateDriveUploadProgress(complete);
+    if (complete) {
+      driveUploadProgress.active = false;
+      driveUploadProgress.planned = false;
+    }
+  }
 
   function getDefaultAppData() {
     return {
@@ -283,20 +359,22 @@ export function initDriveBackend({
   }
 
   function serializableBookmarks() {
-    return (window.imageBookmarks || []).map((b) => {
-      const copy = { ...b };
-      if (copy.driveFileId) {
-        copy.url = null;
-      }
-      if (copy.previewDriveFileId) {
-        copy.previewImageUrl = null;
-      }
-      if (copy.timestamp?.toMillis) {
-        copy.timestampMs = copy.timestamp.toMillis();
-        delete copy.timestamp;
-      }
-      return copy;
-    });
+    return (window.imageBookmarks || [])
+      .filter((b) => b.driveFileId || b.type !== 'local_pending_image')
+      .map((b) => {
+        const copy = { ...b };
+        if (copy.driveFileId || String(copy.url || '').startsWith('blob:')) {
+          copy.url = null;
+        }
+        if (copy.previewDriveFileId || String(copy.previewImageUrl || '').startsWith('blob:')) {
+          copy.previewImageUrl = null;
+        }
+        if (copy.timestamp?.toMillis) {
+          copy.timestampMs = copy.timestamp.toMillis();
+          delete copy.timestamp;
+        }
+        return copy;
+      });
   }
 
   function buildAppData() {
@@ -812,14 +890,29 @@ export function initDriveBackend({
       const notesTabs = {};
       const notesTabList = index.notesTabList.map(({ noteFileName, noteFileId, ...tab }) => tab);
       for (const tab of index.notesTabList) {
+        let loaded = false;
         try {
           let file = null;
           if (tab.noteFileId) file = { id: tab.noteFileId, name: tab.noteFileName };
-          if (!file && tab.noteFileName)
-            file = await findDriveFile(tab.noteFileName, folderId, 'text/plain');
-          notesTabs[tab.id] = file ? await downloadDriveText(file.id) : '';
+          if (file) {
+            notesTabs[tab.id] = await downloadDriveText(file.id);
+            loaded = true;
+          }
         } catch (e) {
-          console.warn('note txt load failed', tab.name, e);
+          console.warn('note txt id load failed', tab.name, e);
+        }
+        if (!loaded && tab.noteFileName) {
+          try {
+            const file = await findDriveFile(tab.noteFileName, folderId, 'text/plain');
+            if (file) {
+              notesTabs[tab.id] = await downloadDriveText(file.id);
+              loaded = true;
+            }
+          } catch (e) {
+            console.warn('note txt name load failed', tab.name, e);
+          }
+        }
+        if (!loaded) {
           notesTabs[tab.id] = '';
         }
       }
@@ -944,33 +1037,33 @@ export function initDriveBackend({
   }
 
   function scheduleSaveNonNotesData() {
-    clearTimeout(driveSaveTimer);
+    clearTimeout(nonNotesSaveTimer);
     currentAppData = buildAppData();
     writeLocalAppDataCache(currentAppData);
     setDriveStatus('로컬 반영됨 · Drive 저장 예약됨');
-    driveSaveTimer = setTimeout(
+    nonNotesSaveTimer = setTimeout(
       () => queueDriveSave(saveNonNotesDataNow).catch((e) => console.error(e)),
       NON_NOTES_SAVE_DELAY_MS
     );
   }
 
   function scheduleSaveAppData() {
-    clearTimeout(driveSaveTimer);
+    clearTimeout(nonNotesSaveTimer);
     currentAppData = buildAppData();
     writeLocalAppDataCache(currentAppData);
     setDriveStatus('저장 예약됨');
-    driveSaveTimer = setTimeout(
+    nonNotesSaveTimer = setTimeout(
       () => queueDriveSave(saveAppDataNow).catch((e) => console.error(e)),
       SAVE_DELAY_MS
     );
   }
 
   function scheduleSaveNotesData() {
-    clearTimeout(driveSaveTimer);
+    clearTimeout(notesSaveTimer);
     currentAppData = buildAppData();
     writeLocalAppDataCache(currentAppData);
     setDriveStatus('메모 저장 예약됨');
-    driveSaveTimer = setTimeout(
+    notesSaveTimer = setTimeout(
       () => queueNotesSave().catch((e) => console.error(e)),
       SAVE_DELAY_MS
     );
@@ -1045,11 +1138,6 @@ export function initDriveBackend({
     const { folders, legacyBookmarks, legacyWorkmusic, legacyClipviewer } =
       await getDriveLoadFolders();
     const parts = {
-      calendar: {
-        customTasks: window.customTasks || [],
-        taskStatus: window.taskStatus || {},
-        updatedAt: new Date().toISOString()
-      },
       notes: await loadNotesFromDrive(folders.notes.id, folders.system.id),
       bookmarks:
         (await loadJsonFromDrive(folders.system.id, DRIVE_BOOKMARKS_FILE)) ||
@@ -1064,6 +1152,11 @@ export function initDriveBackend({
       clipviewer:
         (await loadJsonFromDrive(folders.system.id, DRIVE_CLIP_FILE)) ||
         (legacyClipviewer ? await loadJsonFromDrive(legacyClipviewer.id, DRIVE_CLIP_FILE) : null)
+    };
+    parts.calendar = {
+      customTasks: window.customTasks || [],
+      taskStatus: window.taskStatus || {},
+      updatedAt: new Date().toISOString()
     };
     applyAppData(mergeDriveParts(parts));
     writeLocalAppDataCache(buildAppData());
@@ -1141,6 +1234,8 @@ export function initDriveBackend({
   signOutBtn.onclick = () => {
     const signedOutUser = driveUser;
     forgetAutoLogin();
+    clearTimeout(nonNotesSaveTimer);
+    clearTimeout(notesSaveTimer);
     clearLocalAppDataCache(signedOutUser);
     clearDriveBlobCache();
     driveAccessToken = null;
@@ -1263,7 +1358,7 @@ export function initDriveBackend({
       notesPending = null;
       clearTimeout(notesTimer);
     }
-    clearTimeout(driveSaveTimer);
+    clearTimeout(notesSaveTimer);
     await queueNotesSave();
   };
   window.cloudSetActiveNotesTab = async (tabId) => {
@@ -1424,31 +1519,43 @@ export function initDriveBackend({
   };
 
   async function uploadFileToDrive(file, folderId, namePrefix = 'file') {
-    const ms = nowMs();
-    let parentId = folderId;
-    if (!parentId) {
-      const tabId = window.__bookmarkActiveTabId || 'default';
-      const tabFolder = await getBookmarkTabDriveFolder(tabId);
-      parentId = tabFolder.id;
+    beginDriveUpload(
+      namePrefix === 'bookmark_preview' ? '미리보기 Drive 업로드' : '이미지 Drive 업로드'
+    );
+    try {
+      const ms = nowMs();
+      let parentId = folderId;
+      if (!parentId) {
+        const tabId = window.__bookmarkActiveTabId || 'default';
+        const tabFolder = await getBookmarkTabDriveFolder(tabId);
+        parentId = tabFolder.id;
+      }
+      const ext = fileExtFromBlob(file);
+      const name = `${formatDriveFileTime(ms)}${ext}`;
+      const uploaded = await uploadDriveMultipart({
+        name,
+        blob: file,
+        parentId,
+        mimeType: file.type || 'image/png'
+      });
+      uploaded.createdName = name;
+      uploaded.createdMs = ms;
+      putCachedDriveBlob(uploaded.id, file);
+      return uploaded;
+    } finally {
+      finishDriveUpload();
     }
-    const ext = fileExtFromBlob(file);
-    const name = `${formatDriveFileTime(ms)}${ext}`;
-    const uploaded = await uploadDriveMultipart({
-      name,
-      blob: file,
-      parentId,
-      mimeType: file.type || 'image/png'
-    });
-    uploaded.createdName = name;
-    uploaded.createdMs = ms;
-    putCachedDriveBlob(uploaded.id, file);
-    return uploaded;
   }
 
   async function uploadDriveMultipartCached(args) {
-    const uploaded = await uploadDriveMultipart(args);
-    if (uploaded?.id && args?.blob) putCachedDriveBlob(uploaded.id, args.blob);
-    return uploaded;
+    beginDriveUpload('Drive 업로드');
+    try {
+      const uploaded = await uploadDriveMultipart(args);
+      if (uploaded?.id && args?.blob) putCachedDriveBlob(uploaded.id, args.blob);
+      return uploaded;
+    } finally {
+      finishDriveUpload();
+    }
   }
 
   window.addVideoBookmark = async (url) => {
@@ -1644,6 +1751,7 @@ export function initDriveBackend({
     findDriveFile,
     uploadDriveMultipart: uploadDriveMultipartCached,
     downloadDriveBlob: downloadDriveBlobCached,
+    beginDriveUploadBatch,
     getClipPages: () => (currentAppData.state && currentAppData.state.clipPages) || [],
     saveClipManifest: async (manifest) => {
       currentAppData.state = currentAppData.state || {};
