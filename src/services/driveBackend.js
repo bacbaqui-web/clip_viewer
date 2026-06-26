@@ -157,6 +157,19 @@ export function initDriveBackend({
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
+  function normalizeTabList(tabs, fallback) {
+    const seen = new Set();
+    const normalized = (Array.isArray(tabs) ? tabs : [])
+      .filter((tab) => tab?.id && !seen.has(tab.id) && seen.add(tab.id))
+      .map((tab, index) => ({
+        ...tab,
+        name: String(tab.name || fallback?.name || '탭').trim() || fallback?.name || '탭',
+        order: Number.isFinite(Number(tab.order)) ? Number(tab.order) : index * 10
+      }))
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    return normalized.length ? normalized : [fallback];
+  }
+
   function toPlainData(value) {
     return JSON.parse(JSON.stringify(value ?? null));
   }
@@ -452,7 +465,7 @@ export function initDriveBackend({
   function collectState() {
     return {
       taskStatus: window.taskStatus || {},
-      notesTabList: window.__notesTabList || [{ id: 'memo', name: '메모', order: 0 }],
+      notesTabList: normalizeTabList(window.__notesTabList, { id: 'memo', name: '메모', order: 0 }),
       notesTabs: window.__notesTabs || {},
       notesActiveTabId: window.__notesActiveTabId || 'memo',
       bookmarkTabList: window.__bookmarkTabList || [{ id: 'default', name: '기본', order: 0 }],
@@ -507,7 +520,7 @@ export function initDriveBackend({
     window.taskStatus = st.taskStatus || {};
     window.__notesTabList =
       Array.isArray(st.notesTabList) && st.notesTabList.length
-        ? st.notesTabList
+        ? normalizeTabList(st.notesTabList, { id: 'memo', name: '메모', order: 0 })
         : [{ id: 'memo', name: '메모', order: 0 }];
     window.__notesTabs = st.notesTabs || {};
     window.__notesActiveTabId = st.notesActiveTabId || 'memo';
@@ -936,10 +949,8 @@ export function initDriveBackend({
 
   async function saveFirebaseNotesPart(notesPart) {
     const tabs = [
-      ...(notesPart?.notesTabList?.length
-        ? notesPart.notesTabList
-        : [{ id: 'memo', name: '메모', order: 0 }])
-    ].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+      ...normalizeTabList(notesPart?.notesTabList, { id: 'memo', name: '메모', order: 0 })
+    ];
     const notes = notesPart?.notesTabs || {};
     await setFirebaseDocument('notes', 'meta', {
       version: 1,
@@ -959,9 +970,11 @@ export function initDriveBackend({
     if (!meta?.notesTabList) return null;
     const rows = await readFirebaseCollection('notesTabs');
     const textById = Object.fromEntries(rows.map((row) => [row.id, row.text || '']));
-    const notesTabList = meta.notesTabList.length
-      ? meta.notesTabList
-      : [{ id: 'memo', name: '메모', order: 0 }];
+    const notesTabList = normalizeTabList(meta.notesTabList, {
+      id: 'memo',
+      name: '메모',
+      order: 0
+    });
     const notesTabs = {};
     notesTabList.forEach((tab) => {
       notesTabs[tab.id] = textById[tab.id] || '';
@@ -1725,7 +1738,8 @@ export function initDriveBackend({
     scheduleSaveNotesData();
   };
   window.cloudAddNotesTab = async ({ id, name }) => {
-    const list = window.__notesTabList || [];
+    const list = normalizeTabList(window.__notesTabList, { id: 'memo', name: '메모', order: 0 });
+    if (list.some((tab) => tab.id === id)) return;
     const max = list.reduce((m, t) => Math.max(m, Number(t.order || 0)), 0);
     window.__notesTabList = [...list, { id, name, order: max + 10 }];
     window.__notesActiveTabId = id;

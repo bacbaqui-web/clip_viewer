@@ -89,12 +89,21 @@ export function openTabSettings({
   setActionVisibility();
   updateMoveState();
 
+  let saving = false;
   saveBtn.onclick = async () => {
+    if (saving) return;
     const name = input.value.trim().slice(0, 20);
     if (!name) return;
-    if (create) await onCreate?.(name);
-    else if (tab?.id) await onSave?.(tab.id, name);
-    close();
+    saving = true;
+    saveBtn.disabled = true;
+    try {
+      if (create) await onCreate?.(name);
+      else if (tab?.id) await onSave?.(tab.id, name);
+      close();
+    } finally {
+      saving = false;
+      saveBtn.disabled = false;
+    }
   };
   deleteBtn.onclick = async () => {
     if (!tab?.id) return;

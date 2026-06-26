@@ -146,7 +146,6 @@ export function initNotes() {
           window.cloudSaveNotesNow(prev.tabId, prev.value).catch((e) => console.error(e));
         const id = genId();
         await window.cloudAddNotesTab?.({ id, name });
-        await setActive(id);
       }
     });
   }
