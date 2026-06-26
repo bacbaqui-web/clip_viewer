@@ -197,10 +197,12 @@
       <div class="flex items-center justify-between mb-2" id="notesHeaderRow">
         <div id="notesTabsContainer" class="notepad-tabs flex flex-wrap gap-2"></div>
       </div>
-      <textarea
-        id="notesArea"
-        class="w-full notes-area p-4 bg-black text-white border border-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 rounded-lg"
-      ></textarea>
+      <div id="notesEditorFrame" class="notes-editor-frame">
+        <textarea
+          id="notesArea"
+          class="w-full notes-area p-4 bg-black text-white border border-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 rounded-lg"
+        ></textarea>
+      </div>
     </div>
 
     <div id="bookmarks-section" class="section-card tab-content text-left">
@@ -948,6 +950,8 @@
       // DOM 요소
       const tabButtons = document.querySelectorAll('#main-tabs .notepad-tab');
       const tabContents = document.querySelectorAll('.tab-content');
+      const driveSaveIndicator = document.getElementById('driveSaveIndicator');
+      const notesEditorFrame = document.getElementById('notesEditorFrame');
       // 유틸리티 함수
       const showFeedbackMessage = (message) => {
         const el = document.createElement('div');
@@ -996,6 +1000,16 @@
         document.getElementById(`${tabId}-section`).classList.add('active');
         const btn = document.querySelector(`#main-tabs .notepad-tab[data-tab="${tabId}"]`);
         if (btn) btn.classList.add('active');
+        syncDriveSaveIndicatorPlacement(tabId);
+      }
+      function syncDriveSaveIndicatorPlacement(tabId) {
+        if (!driveSaveIndicator) return;
+        const useNotesPosition = tabId === 'notes' && notesEditorFrame;
+        driveSaveIndicator.classList.toggle('in-notes-editor', Boolean(useNotesPosition));
+        const nextParent = useNotesPosition ? notesEditorFrame : document.body;
+        if (driveSaveIndicator.parentElement !== nextParent) {
+          nextParent.appendChild(driveSaveIndicator);
+        }
       }
       window.showTab = showTab;
       showTab('calendar');

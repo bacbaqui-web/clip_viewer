@@ -303,8 +303,25 @@ body {
 }
 
 /* 메모 입력 영역은 탭과 분리되게 약간 간격 */
+#notes-section {
+  height: calc(100dvh - 132px);
+  min-height: 560px;
+}
 #notesArea {
+  display: block;
+  height: auto;
   margin-top: 10px;
+  min-height: 0;
+}
+.notes-editor-frame {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+.notes-editor-frame #notesArea {
+  flex: 1 1 auto;
+  padding-top: 48px;
 }
 
 /* 북마크 탭도 메모 탭과 동일한 둥근 네모 스타일 */
@@ -562,7 +579,7 @@ body {
 }
 .notes-area {
   flex-grow: 1;
-  resize: vertical;
+  resize: none;
 }
 textarea#notesArea::-webkit-scrollbar {
   width: 8px;
@@ -572,6 +589,9 @@ textarea#notesArea::-webkit-scrollbar {
 textarea#notesArea::-webkit-scrollbar-thumb {
   background-color: #555;
   border-radius: 10px;
+}
+textarea#notesArea::-webkit-resizer {
+  background: transparent;
 }
 .calendar-header {
   display: grid;
@@ -1923,6 +1943,15 @@ body {
 }
 .drive-save-indicator.show {
   display: block;
+}
+.drive-save-indicator.in-notes-editor {
+  position: absolute;
+  top: 22px;
+  right: 12px;
+  bottom: auto;
+  z-index: 10;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
 }
 @media (max-width: 768px) {
   .pc-only {
