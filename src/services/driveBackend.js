@@ -19,7 +19,10 @@ export function initDriveBackend({
   const DRIVE_CONFIG = DRIVE_APP_CONFIG.drive || {};
   const DRIVE_FOLDERS = DRIVE_CONFIG.folders || {};
   const DRIVE_FILES = DRIVE_CONFIG.files || {};
-  const DRIVE_SCOPE = DRIVE_CONFIG.scope || 'https://www.googleapis.com/auth/drive.file';
+  const DRIVE_SCOPE = [
+    DRIVE_CONFIG.scope || 'https://www.googleapis.com/auth/drive.file',
+    ...(FIREBASE_ENABLED ? ['email', 'profile'] : [])
+  ].join(' ');
   const DRIVE_APP_FOLDER = DRIVE_FOLDERS.app || 'magamiscoming';
   const DRIVE_SYSTEM_FOLDER = DRIVE_FOLDERS.system || 'system';
   const DRIVE_CALENDAR_FOLDER = DRIVE_FOLDERS.calendar || '달력';
@@ -167,7 +170,15 @@ export function initDriveBackend({
   }
 
   function getFirebaseStatusLabel() {
-    return isFirebaseActive() ? 'Firebase' : 'Google Drive';
+    return FIREBASE_ENABLED ? 'Firebase' : 'Google Drive';
+  }
+
+  function assertMetadataBackendReady() {
+    if (FIREBASE_ENABLED && !isFirebaseActive()) {
+      throw new Error(
+        'Firebase 연결이 필요합니다. Firebase Authentication/Firestore 설정을 확인해 주세요.'
+      );
+    }
   }
 
   function getFirebaseDocRef(section, id = 'main') {
@@ -234,8 +245,9 @@ export function initDriveBackend({
       firebaseUser = result.user || firebaseApi.auth.currentUser || null;
       return firebaseUser;
     } catch (e) {
-      console.warn('Firebase sign-in skipped', e);
+      console.error('Firebase sign-in failed', e);
       firebaseUser = null;
+      if (FIREBASE_ENABLED) throw e;
       return null;
     }
   }
@@ -558,8 +570,16 @@ export function initDriveBackend({
           driveAccessToken = resp.access_token;
           silentSignInUnavailable = false;
           rememberAutoLogin();
-          await signInFirebaseWithGoogleToken(resp.access_token);
-          await afterGoogleLogin();
+          try {
+            await signInFirebaseWithGoogleToken(resp.access_token);
+            await afterGoogleLogin();
+          } catch (e) {
+            autoSignInAttempting = false;
+            driveAccessToken = null;
+            forgetAutoLogin();
+            console.error(e);
+            window.showAlert('Firebase 로그인에 실패했습니다: ' + (e.message || e));
+          }
         } else {
           autoSignInAttempting = false;
           if (requestMode === 'silent') {
@@ -738,13 +758,18 @@ export function initDriveBackend({
   async function ensureDriveFolders() {
     if (driveFolders) return driveFolders;
     const app = await getOrCreateDriveFolder(DRIVE_APP_FOLDER);
-    const system = await getOrCreateDriveFolder(DRIVE_SYSTEM_FOLDER, app.id);
-    const notes = await getOrCreateDriveFolder(DRIVE_NOTES_FOLDER, app.id);
     const bookmarks = await getOrCreateDriveFolder(DRIVE_BOOKMARKS_FOLDER, app.id);
+    const clip = await getOrCreateDriveFolder(DRIVE_CLIP_FOLDER, app.id);
+    const system = FIREBASE_ENABLED
+      ? null
+      : await getOrCreateDriveFolder(DRIVE_SYSTEM_FOLDER, app.id);
+    const notes = FIREBASE_ENABLED
+      ? null
+      : await getOrCreateDriveFolder(DRIVE_NOTES_FOLDER, app.id);
     // 북마크 이미지는 중간 '이미지' 폴더 없이 북마크 폴더 바로 아래 탭별 폴더에 저장
     const bookmarkImages = bookmarks;
-    const clipCurrent = await getOrCreateDriveFolder(DRIVE_CLIP_CURRENT_FOLDER, system.id);
-    driveFolders = { app, system, notes, bookmarks, bookmarkImages, clipCurrent };
+    const clipCurrent = await getOrCreateDriveFolder(DRIVE_CLIP_CURRENT_FOLDER, clip.id);
+    driveFolders = { app, system, notes, bookmarks, bookmarkImages, clip, clipCurrent };
     return driveFolders;
   }
 
@@ -1211,6 +1236,7 @@ export function initDriveBackend({
           setDriveStatus('Firebase 저장 완료');
           return;
         }
+        assertMetadataBackendReady();
         const folders = await ensureDriveFolders();
         await Promise.all([
           saveJsonToDrive(folders.system.id, DRIVE_CALENDAR_FILE, parts.calendar),
@@ -1241,6 +1267,7 @@ export function initDriveBackend({
           setDriveStatus('Firebase 저장 완료');
           return;
         }
+        assertMetadataBackendReady();
         const folders = await ensureDriveFolders();
         await Promise.all([
           saveJsonToDrive(folders.system.id, DRIVE_CALENDAR_FILE, parts.calendar),
@@ -1270,6 +1297,7 @@ export function initDriveBackend({
           setDriveStatus('메모 Firebase 저장 완료');
           return;
         }
+        assertMetadataBackendReady();
         const folders = await ensureDriveFolders();
         await saveNotesToDrive(folders.notes.id, folders.system.id, parts.notes);
         setDriveStatus('메모 Drive 저장 완료');
@@ -1339,6 +1367,12 @@ export function initDriveBackend({
       await window.loadClipPagesFromDrive?.(false);
       return;
     }
+    if (FIREBASE_ENABLED) {
+      currentAppData = getDefaultAppData();
+      applyAppData(currentAppData);
+      await saveAppDataNow();
+      return;
+    }
     const folders = await ensureDriveFolders();
     const legacyCalendar = await getLegacyDriveFolder(DRIVE_CALENDAR_FOLDER);
     const legacyBookmarks = await getLegacyDriveFolder(DRIVE_BOOKMARKS_FOLDER);
@@ -1403,6 +1437,9 @@ export function initDriveBackend({
       currentAppData.state.taskStatus = window.taskStatus;
       return { firebase: true, calendar: firebaseCalendar };
     }
+    if (FIREBASE_ENABLED) {
+      return { firebase: true, calendar: null };
+    }
     const { folders, legacyCalendar } = await getDriveLoadFolders();
     const calendar =
       (await loadJsonFromDrive(folders.system.id, DRIVE_CALENDAR_FILE)) ||
@@ -1429,6 +1466,13 @@ export function initDriveBackend({
         updatedAt: new Date().toISOString()
       };
       applyAppData(mergeDriveParts(firebaseParts));
+      renderEverything();
+      resolveDriveBookmarkImages()
+        .then(() => window.renderImageBookmarks?.())
+        .catch((e) => console.warn('bookmark image background load failed', e));
+      return;
+    }
+    if (FIREBASE_ENABLED) {
       renderEverything();
       resolveDriveBookmarkImages()
         .then(() => window.renderImageBookmarks?.())
